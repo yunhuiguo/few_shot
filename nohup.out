@@ -1,0 +1,12 @@
+/home/yunhui/anaconda2/lib/python2.7/site-packages/torchvision/transforms/transforms.py:563: UserWarning: The use of the transforms.RandomSizedCrop transform is deprecated, please use transforms.RandomResizedCrop instead.
+  "please use transforms.RandomResizedCrop instead.")
+/home/yunhui/anaconda2/lib/python2.7/site-packages/torchvision/transforms/transforms.py:188: UserWarning: The use of the transforms.Scale transform is deprecated, please use transforms.Resize instead.
+  "please use transforms.Resize instead.")
+/home/yunhui/anaconda2/lib/python2.7/site-packages/torchvision/transforms/transforms.py:563: UserWarning: The use of the transforms.RandomSizedCrop transform is deprecated, please use transforms.RandomResizedCrop instead.
+  "please use transforms.RandomResizedCrop instead.")
+/home/yunhui/anaconda2/lib/python2.7/site-packages/torchvision/transforms/transforms.py:188: UserWarning: The use of the transforms.Scale transform is deprecated, please use transforms.Resize instead.
+  "please use transforms.Resize instead.")
+Traceback (most recent call last):
+  File "./train_knowledge.py", line 494, in <module>
+    test_loop(novel_loader, val_loader, return_std = False)
+NameError: name 'novel_loader' is not defined
