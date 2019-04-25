@@ -19,6 +19,8 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file  
 
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot
+
 def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params):    
     if optimization == 'Adam':
         optimizer = torch.optim.Adam(model.parameters())
@@ -52,39 +54,61 @@ if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
 
-    if params.dataset == 'cross':
-        base_file = configs.data_dir['miniImagenet'] + 'all.json' 
-        val_file   = configs.data_dir['CUB'] + 'val.json' 
-    elif params.dataset == 'cross_char':
-        base_file = configs.data_dir['omniglot'] + 'noLatin.json' 
-        val_file   = configs.data_dir['emnist'] + 'val.json' 
-    else:
-        base_file = configs.data_dir[params.dataset] + 'base.json' 
-        val_file   = configs.data_dir[params.dataset] + 'val.json' 
-         
+    if params.dataset not in ['cifar100_to_caltech256', 'caltech256_to_cifar100']:
+
+        if params.dataset == 'miniImageNet_to_CUB':
+            base_file = configs.data_dir['miniImagenet'] + 'all.json' 
+            val_file   = configs.data_dir['CUB'] + 'val.json' 
+
+        elif params.dataset == 'CUB_to_miniImageNet':
+            base_file = configs.data_dir['CUB'] + 'base.json' 
+            val_file   = configs.data_dir['miniImagenet'] + 'val.json' 
+
+        elif params.dataset == 'omniglot_to_emnist':
+            base_file = configs.data_dir['omniglot'] + 'noLatin.json' 
+            val_file   = configs.data_dir['emnist'] + 'val.json' 
+
     if 'Conv' in params.model:
-        if params.dataset in ['omniglot', 'cross_char']:
+        if params.dataset in ['omniglot', 'omniglot_to_emnist']:
             image_size = 28
         else:
             image_size = 84
     else:
         image_size = 224
 
-    if params.dataset in ['omniglot', 'cross_char']:
+    if params.dataset in ['omniglot', 'omniglot_to_emnist']:
         assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
         params.model = 'Conv4S'
 
     optimization = 'Adam'
-
     if params.method in ['baseline', 'baseline++'] :
-        base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
-        base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
-        val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
-        val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
+
+        if params.dataset not in ["caltech256_to_cifar100", "cifar100_to_caltech256"]:
+
+            base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
+            base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
+            
+            val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
+            val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
         
+        elif params.dataset == "cifar100_to_caltech256":
+            base_datamgr    = cifar_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
+
+            val_datamgr     = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
+            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
+            
+        elif params.dataset == "caltech256_to_cifar100":
+            base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_loader     = base_datamgr.get_data_loader( "base" , aug = True )
+
+            val_datamgr     = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
+            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
+
+
         if params.dataset == 'omniglot':
             assert params.num_classes >= 4112, 'class number need to be larger than max label id in base class'
-        if params.dataset == 'cross_char':
+        if params.dataset == 'omniglot_to_emnist':
             assert params.num_classes >= 1597, 'class number need to be larger than max label id in base class'
 
         if params.method == 'baseline':
@@ -94,15 +118,30 @@ if __name__=='__main__':
 
     elif params.method in ['protonet','matchingnet','relationnet', 'relationnet_softmax', 'maml', 'maml_approx']:
         n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
- 
         train_few_shot_params    = dict(n_way = params.train_n_way, n_support = params.n_shot) 
-        base_datamgr            = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
-        base_loader             = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
-         
         test_few_shot_params     = dict(n_way = params.test_n_way, n_support = params.n_shot) 
-        val_datamgr             = SetDataManager(image_size, n_query = n_query, **test_few_shot_params)
-        val_loader              = val_datamgr.get_data_loader( val_file, aug = False) 
-        #a batch for SetDataManager: a [n_way, n_support + n_query, dim, w, h] tensor        
+
+
+        if params.dataset not in ["caltech256_to_cifar100", "cifar100_to_caltech256"]:
+            base_datamgr            = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
+            base_loader             = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
+            val_datamgr             = SetDataManager(image_size, n_query = n_query, **test_few_shot_params)
+            val_loader              = val_datamgr.get_data_loader( val_file, aug = False) 
+
+        elif params.dataset == "cifar100_to_caltech256":
+             
+            base_datamgr            = cifar_few_shot.SetDataManager('base', image_size, n_query = n_query, **train_few_shot_params)
+            base_loader             = base_datamgr.get_data_loader(aug = params.train_aug)
+           
+            val_datamgr             = caltech256_few_shot.SetDataManager('val', image_size, n_query = n_query, **test_few_shot_params)
+            val_loader              = val_datamgr.get_data_loader( aug = False) 
+       
+        elif params.dataset == "caltech256_to_cifar100":
+             
+            base_datamgr            = caltech256_few_shot.SetDataManager('base', image_size, n_query = n_query, **train_few_shot_params)
+            base_loader             = base_datamgr.get_data_loader(aug = params.train_aug)
+            val_datamgr             = cifar_few_shot.SetDataManager('val', image_size, n_query = n_query, **test_few_shot_params)
+            val_loader              = val_datamgr.get_data_loader( aug = False) 
 
         if params.method == 'protonet':
             model           = ProtoNet( model_dict[params.model], **train_few_shot_params )
@@ -126,7 +165,7 @@ if __name__=='__main__':
             backbone.BottleneckBlock.maml = True
             backbone.ResNet.maml = True
             model           = MAML(  model_dict[params.model], approx = (params.method == 'maml_approx') , **train_few_shot_params )
-            if params.dataset in ['omniglot', 'cross_char']: #maml use different parameter in omniglot
+            if params.dataset in ['omniglot', 'omniglot_to_emnist']: #maml use different parameter in omniglot
                 model.n_task     = 32
                 model.task_update_num = 1
                 model.train_lr = 0.1

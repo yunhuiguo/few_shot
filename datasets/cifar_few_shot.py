@@ -25,10 +25,15 @@ class SimpleDataset:
                 if label % 3 == 0:
                     self.meta['image_names'].append(data)
                     self.meta['image_labels'].append(label)
-            elif base == "val":
+            elif mode == "val":
                 if label % 3 == 1:
                     self.meta['image_names'].append(data)
                     self.meta['image_labels'].append(label)           
+            else:
+                if label % 3 == 2:
+                    self.meta['image_names'].append(data)
+                    self.meta['image_labels'].append(label)      
+
 
     def __getitem__(self, i):
 
@@ -40,18 +45,27 @@ class SimpleDataset:
     def __len__(self):
         return len(self.meta['image_names'])
 
+
 class SetDataset:
-    def __init__(self, batch_size, transform):
+    def __init__(self, mode, batch_size, transform):
 
         self.sub_meta = {}
         self.cl_list = range(100)
+
+        if mode == "base":
+            type_ = 0
+        elif mode == "val":
+            type_ = 1
+        else:
+            type_ = 2
+
         for cl in self.cl_list:
-            if cl % 3 == 2:
+            if cl % 3 == type_:
                 self.sub_meta[cl] = []
 
         d = CIFAR100("./", train=True, download=True)
         for i, (data, label) in enumerate(d):
-            if label % 3 == 2:
+            if label % 3 == type_:
                 self.sub_meta[label].append(data)
     
         self.sub_dataloader = [] 
@@ -60,7 +74,7 @@ class SetDataset:
                                   num_workers = 0, #use main thread only or may receive multiple batches
                                   pin_memory = False)        
         for cl in self.cl_list:
-            if cl % 3 == 2:
+            if cl % 3 == type_:
                 sub_dataset = SubDataset(self.sub_meta[cl], cl, transform = transform )
                 self.sub_dataloader.append( torch.utils.data.DataLoader(sub_dataset, **sub_data_loader_params) )
 
@@ -147,24 +161,26 @@ class SimpleDataManager(DataManager):
     def get_data_loader(self, mode, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
         dataset = SimpleDataset(mode, transform)
+
         data_loader_params = dict(batch_size = self.batch_size, shuffle = True, num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
 
         return data_loader
 
 class SetDataManager(DataManager):
-    def __init__(self, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
+    def __init__(self, mode, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
         super(SetDataManager, self).__init__()
         self.image_size = image_size
         self.n_way = n_way
         self.batch_size = n_support + n_query
         self.n_eposide = n_eposide
+        self.mode = mode
 
         self.trans_loader = TransformLoader(image_size)
 
     def get_data_loader(self, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
-        dataset = SetDataset(self.batch_size, transform)
+        dataset = SetDataset(self.mode, self.batch_size, transform)
         sampler = EpisodicBatchSampler(len(dataset), self.n_way, self.n_eposide )  
         data_loader_params = dict(batch_sampler = sampler,  num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
@@ -173,19 +189,21 @@ class SetDataManager(DataManager):
 if __name__ == '__main__':
 
     train_few_shot_params   = dict(n_way = 5, n_support = 5) 
-    base_datamgr            = SetDataManager(224, n_query = 16)
+    base_datamgr            = SetDataManager('novel', 224, n_query = 16)
     base_loader             = base_datamgr.get_data_loader(aug = True)
 
     cnt = 10
     for i, (x, label) in enumerate(base_loader):
         if i < cnt:
-            print x.size()
             print label
         else:
             break
 
-    base_datamgr    = SimpleDataManager(224, batch_size = 16)
-    base_loader     = base_datamgr.get_data_loader( "base" , aug = True )
+    '''
+    base_datamgr  = SimpleDataManager(224, batch_size = 16)
+
+    base_loader, classes     = base_datamgr.get_data_loader( "base" , aug = True )
+    print classes
     cnt = 10
     for i, (data, label) in enumerate(base_loader):
         if i < cnt:
@@ -193,5 +211,7 @@ if __name__ == '__main__':
         else:
             break
 
-    #val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
-    #val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
+    val_datamgr     = SimpleDataManager(224, batch_size = 64)
+    val_loader, classes      = val_datamgr.get_data_loader( "val", aug = False)
+    print classes
+    '''

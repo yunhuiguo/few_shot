@@ -16,6 +16,8 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file, get_assigned_file 
 
+from datasets import svhn_few_shot, cifar_few_shot,  caltech256_few_shot
+
 def save_features(model, data_loader, outfile ):
     f = h5py.File(outfile, 'w')
     max_count = len(data_loader)*data_loader.batch_size
@@ -44,47 +46,36 @@ if __name__ == '__main__':
     assert params.method != 'maml' and params.method != 'maml_approx', 'maml do not support save_feature and run'
 
     if 'Conv' in params.model:
-        if params.dataset in ['omniglot', 'cross_char']:
+        if params.dataset in ['omniglot', 'omniglot_to_emnist']:
             image_size = 28
         else:
             image_size = 84 
     else:
         image_size = 224
 
-    if params.dataset in ['omniglot', 'cross_char']:
+    if params.dataset in ['omniglot', 'omniglot_to_emnist']:
         assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
         params.model = 'Conv4S'
 
     split = params.split
-    if params.dataset == 'cross':
-        if split == 'base':
-            loadfile = configs.data_dir['miniImagenet'] + 'all.json' 
-        else:
-            loadfile   = configs.data_dir['CUB'] + split +'.json' 
-    
-    elif params.dataset == 'cross_char':
-        if split == 'base':
-            loadfile = configs.data_dir['omniglot'] + 'noLatin.json' 
-        else:
-            loadfile  = configs.data_dir['emnist'] + split +'.json' 
-    else:
-        loadfile = configs.data_dir[params.dataset] + split + '.json'
 
+    if params.dataset == "CUB_to_miniImageNet":
+        loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
+    elif params.dataset == "miniImageNet_to_CUB":
+        loadfile   = configs.data_dir['CUB'] + split +'.json' 
+
+    elif params.dataset == "omniglot_to_emnist":
+        loadfile  = configs.data_dir['emnist'] + split +'.json' 
 
     checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)
     if params.train_aug:
         checkpoint_dir += '_aug'
+
     if not params.method in ['baseline', 'baseline++'] :
         checkpoint_dir += '_%dway_%dshot' %( params.train_n_way, params.n_shot)
 
-    '''
-    checkpoint_dir = "./pretrained/cifar10/"
-    params.save_iter = 50
-    '''
-
     if params.save_iter != -1:
-        modelfile   = get_assigned_file(checkpoint_dir,params.save_iter)
-    
+        modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
     elif params.method in ['baseline', 'baseline++'] :
         modelfile   = get_resume_file(checkpoint_dir)
     else:
@@ -95,8 +86,19 @@ if __name__ == '__main__':
     else:
         outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + ".hdf5") 
 
-    datamgr         = SimpleDataManager(image_size, batch_size = 64)
-    data_loader     = datamgr.get_data_loader(loadfile, aug = False)
+
+    if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
+
+        datamgr         = SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader(loadfile, aug = False)
+
+    elif params.dataset == "cifar100_to_caltech256":
+        datamgr         = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader( "novel" , aug = False )
+
+    elif params.dataset == "caltech256_to_cifar100":
+        datamgr         = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader( "novel" , aug = False )   
 
     if params.method in ['relationnet', 'relationnet_softmax']:
         if params.model == 'Conv4': 
@@ -107,6 +109,7 @@ if __name__ == '__main__':
             model = backbone.Conv4SNP()
         else:
             model = model_dict[params.model]( flatten = False )
+
     elif params.method in ['maml' , 'maml_approx']: 
        raise ValueError('MAML do not support save feature')
     else:
