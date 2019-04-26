@@ -390,6 +390,9 @@ class ResNet(nn.Module):
 def Conv4():
     return ConvNet(4)
 
+def Conv4_noflatten( flatten = False):
+    return ConvNet(4, flatten)
+
 def Conv6():
     return ConvNet(6)
 
@@ -402,6 +405,9 @@ def Conv6NP():
 def Conv4S():
     return ConvNetS(4)
 
+def Conv4S_noflatten( flatten = False):
+    return ConvNetS(4, flatten)
+
 def Conv4SNP():
     return ConvNetSNopool(4)
 
@@ -413,6 +419,8 @@ def ResNet18( flatten = True):
 
 def ResNet18_noflatten( flatten = False):
     return ResNet(SimpleBlock, [2,2,2,2],[64,128,256,512], flatten)
+
+
 
 def ResNet34( flatten = True):
     return ResNet(SimpleBlock, [3,4,6,3],[64,128,256,512], flatten)

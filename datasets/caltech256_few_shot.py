@@ -48,14 +48,16 @@ class Caltech256(data.Dataset):
 
     self.data = []
     self.labels = []
+
     for cat in range(0, 257):
       cat_dirs = glob.glob(os.path.join(self.root, self.base_folder, '%03d*' % cat))
 
       for fdir in cat_dirs:
         for fimg in glob.glob(os.path.join(fdir, '*.jpg')):
-          img = imread(fimg)
-          self.data.append(img)
-          self.labels.append(cat)
+            img = Image.open(fimg).convert("RGB")
+
+            self.data.append(img)
+            self.labels.append(cat)
 
   def __getitem__(self, index):
     """
@@ -66,7 +68,7 @@ class Caltech256(data.Dataset):
     """
     img, target = self.data[index], self.labels[index]
 
-    img = Image.fromarray(img)
+    #img = Image.fromarray(img)
 
     if self.transform is not None:
       img = self.transform(img)
@@ -121,7 +123,7 @@ class SimpleDataset:
         self.meta['image_names'] = []
         self.meta['image_labels'] = []
 
-        d = Caltech256(root='./', download=True)
+        d = Caltech256(root='./', download=False)
         for i, (data, label) in enumerate(d):
             if mode == "base":
                 if label % 3 == 0:
@@ -131,10 +133,11 @@ class SimpleDataset:
                 if label % 3 == 1:
                     self.meta['image_names'].append(data)
                     self.meta['image_labels'].append(label)           
-            else:
+            elif mode == "novel":
                 if label % 3 == 2:
                     self.meta['image_names'].append(data)
                     self.meta['image_labels'].append(label)      
+
 
     def __getitem__(self, i):
 
@@ -151,7 +154,7 @@ class SetDataset:
     def __init__(self, mode, batch_size, transform):
 
         self.sub_meta = {}
-        self.cl_list = range(256)
+        self.cl_list = range(257)
 
         if mode == "base":
             type_ = 0
@@ -164,7 +167,7 @@ class SetDataset:
             if cl % 3 == type_:
                 self.sub_meta[cl] = []
 
-        d = Caltech256(root='./', download=True)
+        d = Caltech256(root='./', download=False)
         for i, (data, label) in enumerate(d):
             if label % 3 == type_:
                 self.sub_meta[label].append(data)
@@ -288,12 +291,12 @@ class SetDataManager(DataManager):
         return data_loader
 
 if __name__ == '__main__':
-
+    '''
     train_few_shot_params   = dict(n_way = 5, n_support = 5) 
     base_datamgr            = SetDataManager('novel', 224, n_query = 16)
     base_loader             = base_datamgr.get_data_loader(aug = True)
 
-    '''
+    
     cnt = 10
     for i, (x, label) in enumerate(base_loader):
         if i < cnt:
@@ -301,11 +304,10 @@ if __name__ == '__main__':
         else:
             break
     '''
-    '''
+    
     base_datamgr  = SimpleDataManager(224, batch_size = 16)
 
-    base_loader, classes     = base_datamgr.get_data_loader( "base" , aug = True )
-    print classes
+    base_loader = base_datamgr.get_data_loader( "novel" , aug = False )
     cnt = 10
     for i, (data, label) in enumerate(base_loader):
         if i < cnt:
@@ -313,7 +315,4 @@ if __name__ == '__main__':
         else:
             break
 
-    val_datamgr     = SimpleDataManager(224, batch_size = 64)
-    val_loader, classes      = val_datamgr.get_data_loader( "val", aug = False)
-    print classes
-    '''
+

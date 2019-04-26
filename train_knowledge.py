@@ -24,8 +24,10 @@ from io_utils import model_dict, parse_args, get_resume_file, get_best_file, get
 from methods.featurenet_cifar import featurenet_cifar
 from methods.knowledge import knowledge
 from utils import *
-#from datasets import cifar_few_shot
 import backbone
+
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot
+
 
 def loss_fn_kd(outputs, labels, teacher_outputs, alpha=0.3):
     """
@@ -56,15 +58,20 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
     iter_num = len(novel_loader) 
     for i, (x,_) in enumerate(novel_loader):
         print i
+        print x.size()
         start = time.time()
         ###############################################################################################
-        student           = knowledge(  backbone.ResNet18_noflatten, **train_few_shot_params )
+        if params.dataset == "omniglot_to_emnist":
+            student           = knowledge(  backbone.Conv4S_noflatten)
+        else:
+            student           = knowledge(  backbone.ResNet18_noflatten)
  
         method = "baseline"
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, method)
         if params.train_aug:
             checkpoint_dir += '_aug'
+        print checkpoint_dir
 
         params.save_iter = 399
         if params.save_iter != -1:
@@ -76,11 +83,13 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
 
         tmp = torch.load(modelfile)
         state = tmp['state']
-
         state = {k: v for k, v in state.items() if 'classifier' not in k}
         student.load_state_dict(state)
 
-        partial = nn.Sequential(*[student.feature.trunk[i] for i in range(11)])
+        if params.dataset == "omniglot_to_emnist":
+            partial = nn.Sequential(*[student.feature.trunk[i] for i in range(3)])
+        else:
+            partial = nn.Sequential(*[student.feature.trunk[i] for i in range(11)])
 
         ###############################################################################################
         student.n_query = x.size(1) - student.n_support
@@ -96,10 +105,15 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
 
         if loss_type == 'softmax':
 
-            feature_transformation =  nn.Sequential(
-                student.feature.trunk[11],
-                nn.AvgPool2d(7),
-                backbone.Flatten()).cuda()
+            if params.dataset == "omniglot_to_emnist":
+                feature_transformation =  nn.Sequential(
+                    student.feature.trunk[3],
+                    backbone.Flatten()).cuda()
+            else:
+                feature_transformation =  nn.Sequential(
+                    student.feature.trunk[11],
+                    nn.AvgPool2d(7),
+                    backbone.Flatten()).cuda()
 
             feature = nn.Sequential(
                 partial,
@@ -198,17 +212,17 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
                 source_score2 = domain_discriminator2(source_feature)
 
                 ###################################################################
-                loss_domain_classifier1 =  0.5*loss_domain(source_score, target_score)
+                loss_domain_classifier1 =  0.1*loss_domain(source_score, target_score)
 
                 loss_domain_classifier1.backward(retain_graph=True)
                 domain_opt1.step()
 
-                loss_domain_classifier2 =  0.5*loss_domain(target_score2, source_score2)
+                loss_domain_classifier2 =  0.1*loss_domain(target_score2, source_score2)
                 loss_domain_classifier2.backward(retain_graph=True)
                 domain_opt2.step()
 
-                domain_feature1 = 0.5*loss_domain(target_score, source_score)
-                domain_feature2 = 0.5*loss_domain(source_score2, target_score2)
+                domain_feature1 = 0.1*loss_domain(target_score, source_score)
+                domain_feature2 = 0.1*loss_domain(source_score2, target_score2)
             
                 loss = loss_fn(outputs, y_batch)
                 loss = loss + domain_feature1
@@ -283,12 +297,11 @@ if __name__=='__main__':
     elif params.dataset == 'CUB_to_miniImageNet':
         base_file = configs.data_dir['CUB'] + 'base.json' 
         val_file   = configs.data_dir['miniImagenet'] + 'val.json'
+        
     elif params.dataset == 'omniglot_to_emnist':
         base_file = configs.data_dir['omniglot'] + 'noLatin.json' 
         val_file   = configs.data_dir['emnist'] + 'val.json' 
-    else:
-        base_file = configs.data_dir[params.dataset] + 'base.json' 
-        val_file   = configs.data_dir[params.dataset] + 'val.json' 
+
 
     if 'Conv' in params.model:
         if params.dataset in ['omniglot', 'cross_char']:
@@ -346,31 +359,6 @@ if __name__=='__main__':
 
     elif params.method in ['protonet','matchingnet','relationnet', 'relationnet_softmax', 'maml', 'maml_approx', 'featurenet', 'knowledge']:
         n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
- 
-        train_few_shot_params    = dict(n_way = params.train_n_way, n_support = params.n_shot) 
-        test_few_shot_params     = dict(n_way = params.test_n_way, n_support = params.n_shot) 
-
-        if params.dataset not in ["caltech256_to_cifar100", "cifar100_to_caltech256"]:
-            base_datamgr            = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
-            base_loader             = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
-            val_datamgr             = SetDataManager(image_size, n_query = n_query, **test_few_shot_params)
-            val_loader              = val_datamgr.get_data_loader( val_file, aug = False) 
-
-        elif params.dataset == "cifar100_to_caltech256":
-             
-            base_datamgr            = cifar_few_shot.SetDataManager('base', image_size, n_query = n_query, **train_few_shot_params)
-            base_loader             = base_datamgr.get_data_loader(aug = params.train_aug)
-           
-            val_datamgr             = caltech256_few_shot.SetDataManager('val', image_size, n_query = n_query, **test_few_shot_params)
-            val_loader              = val_datamgr.get_data_loader( aug = False) 
-       
-        elif params.dataset == "caltech256_to_cifar100":
-             
-            base_datamgr            = caltech256_few_shot.SetDataManager('base', image_size, n_query = n_query, **train_few_shot_params)
-            base_loader             = base_datamgr.get_data_loader(aug = params.train_aug)
-          
-            val_datamgr             = cifar_few_shot.SetDataManager('val', image_size, n_query = n_query, **test_few_shot_params)
-            val_loader              = val_datamgr.get_data_loader( aug = False) 
 
         if params.method == 'protonet':
             model           = ProtoNet( model_dict[params.model], **train_few_shot_params )
@@ -425,7 +413,7 @@ if __name__=='__main__':
                 novel_loader    = datamgr.get_data_loader( novel_file, aug = False)
 
             elif params.dataset == "cifar100_to_caltech256":
-                datamgr             = caltech256_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+                base_datamgr        = caltech256_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
                 novel_loader        = base_datamgr.get_data_loader(aug =False)
               
                 base_datamgr    = cifar_few_shot.SimpleDataManager(image_size, batch_size = 25)
@@ -433,7 +421,7 @@ if __name__=='__main__':
 
 
             elif params.dataset == "caltech256_to_cifar100":
-                datamgr            = cifar_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+                base_datamgr       = cifar_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
                 novel_loader       = base_datamgr.get_data_loader(aug =False)
 
                 base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 25)

@@ -14,7 +14,7 @@ import data.feature_loader as feat_loader
 import random
 
 class knowledge(MetaTemplate):
-    def __init__(self, model_func,  n_way, n_support, loss_type = 'softmax'):
+    def __init__(self, model_func,  n_way=5, n_support=5, loss_type = 'softmax'):
         super(knowledge, self).__init__( model_func,  n_way, n_support, change_way = False)
 
         self.feature    = model_func()

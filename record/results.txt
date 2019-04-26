@@ -63,3 +63,5 @@ Time: 20190328-205747, Setting: CUB-novel-ResNet18-baseline-aug 5shot 5way_test,
 Time: 20190330-175001, Setting: CUB-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 83.03% +- 0.54% 
 Time: 20190425-125500, Setting: svhn_to_cifar100-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 37.58% +- 0.67% 
 Time: 20190426-003825, Setting: CUB_to_miniImageNet-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 55.54% +- 0.69% 
+Time: 20190426-134535, Setting: cifar100_to_caltech256-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 66.74% +- 0.76% 
+Time: 20190426-134823, Setting: caltech256_to_cifar100-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 59.48% +- 0.79% 

@@ -121,6 +121,8 @@ if __name__=='__main__':
             model           = BaselineTrain( model_dict[params.model], params.num_classes)
         elif params.method == 'baseline++':
             model           = BaselineTrain( model_dict[params.model], params.num_classes, loss_type = 'dist')
+        print model
+
 
     elif params.method in ['protonet','matchingnet','relationnet', 'relationnet_softmax', 'maml', 'maml_approx']:
         n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
