@@ -420,8 +420,6 @@ def ResNet18( flatten = True):
 def ResNet18_noflatten( flatten = False):
     return ResNet(SimpleBlock, [2,2,2,2],[64,128,256,512], flatten)
 
-
-
 def ResNet34( flatten = True):
     return ResNet(SimpleBlock, [3,4,6,3],[64,128,256,512], flatten)
 
