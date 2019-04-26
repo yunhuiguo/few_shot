@@ -106,9 +106,15 @@ if __name__=='__main__':
             val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
 
 
+        if params.dataset == 'caltech256_to_cifar100':
+            params.num_classes = 256
+            assert params.num_classes >= 256, 'class number need to be larger than max label id in base class'
+
         if params.dataset == 'omniglot':
             assert params.num_classes >= 4112, 'class number need to be larger than max label id in base class'
+        
         if params.dataset == 'omniglot_to_emnist':
+            params.num_classes = 1597
             assert params.num_classes >= 1597, 'class number need to be larger than max label id in base class'
 
         if params.method == 'baseline':
@@ -140,6 +146,7 @@ if __name__=='__main__':
              
             base_datamgr            = caltech256_few_shot.SetDataManager('base', image_size, n_query = n_query, **train_few_shot_params)
             base_loader             = base_datamgr.get_data_loader(aug = params.train_aug)
+          
             val_datamgr             = cifar_few_shot.SetDataManager('val', image_size, n_query = n_query, **test_few_shot_params)
             val_loader              = val_datamgr.get_data_loader( aug = False) 
 

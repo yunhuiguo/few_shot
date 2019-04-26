@@ -17,6 +17,7 @@ test/*
 *.csv.*
 *.csv
 *.zip.*
+*.hdf5
 *.mat.*
 256_ObjectCategories/*
 cifar-100-python/*

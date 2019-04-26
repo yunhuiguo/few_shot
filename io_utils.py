@@ -41,7 +41,6 @@ def parse_args(script):
     else:
        raise ValueError('Unknown script')
         
-
     return parser.parse_args()
 
 

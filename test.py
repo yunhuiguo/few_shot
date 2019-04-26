@@ -89,10 +89,9 @@ if __name__ == '__main__':
     else:
        raise ValueError('Unknown method')
 
-
+    split = params.split
     if params.dataset == "CUB_to_miniImageNet":
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
-        source_dataset = "CUB"
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
     elif params.dataset == "omniglot_to_emnist":
@@ -115,7 +114,6 @@ if __name__ == '__main__':
             tmp = torch.load(modelfile)
             model.load_state_dict(tmp['state'])
 
-    split = params.split
     if params.save_iter != -1:
         split_str = split + "_" +str(params.save_iter)
     else:
@@ -146,11 +144,11 @@ if __name__ == '__main__':
             novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
 
         elif params.dataset == "cifar100_to_caltech256":
-            datamgr             = caltech256_few_shot.SetDataManager('base', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            datamgr             = caltech256_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             novel_loader        = base_datamgr.get_data_loader(aug =False)
           
         elif params.dataset == "caltech256_to_cifar100":
-            datamgr            = cifar_few_shot.SetDataManager('base', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            datamgr            = cifar_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             novel_loader       = base_datamgr.get_data_loader(aug =False)
 
         if params.adaptation:
