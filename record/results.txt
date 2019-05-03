@@ -65,3 +65,9 @@ Time: 20190425-125500, Setting: svhn_to_cifar100-novel-ResNet18-baseline-aug 5sh
 Time: 20190426-003825, Setting: CUB_to_miniImageNet-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 55.54% +- 0.69% 
 Time: 20190426-134535, Setting: cifar100_to_caltech256-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 66.74% +- 0.76% 
 Time: 20190426-134823, Setting: caltech256_to_cifar100-novel-ResNet18-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 59.48% +- 0.79% 
+Time: 20190426-173650, Setting: omniglot_to_emnist-novel-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 83.01% +- 0.58% 
+Time: 20190427-195728, Setting: omniglot_to_emnist-novel-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 82.34% +- 0.62% 
+Time: 20190429-125114, Setting: omniglot_to_emnist-novel-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 82.63% +- 0.59% 
+Time: 20190429-144035, Setting: omniglot_to_emnist-novel-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 68.72% +- 0.75% 
+Time: 20190429-154519, Setting: omniglot_to_emnist-novel-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 67.98% +- 0.78% 
+Time: 20190429-160136, Setting: omniglot_to_emnist-novel_4-Conv4S-baseline 5shot 5way_test, Acc: 600 Test Acc = 86.03% +- 0.60% 

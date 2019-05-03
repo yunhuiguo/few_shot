@@ -317,7 +317,7 @@ class ConvNetS(nn.Module): #For omniglot, only 1 input channel, output dim is 64
         self.trunk = nn.Sequential(*trunk)
         self.final_feat_dim = 64
 
-    def forward(self,x):
+    def forward(self, x):
         out = x[:,0:1,:,:] #only use the first dimension
         out = self.trunk(out)
         return out

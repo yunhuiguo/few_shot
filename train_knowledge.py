@@ -49,31 +49,32 @@ class DomainLoss(torch.nn.Module):
     def forward(self, score1, score2):
         return  torch.mean(- torch.log(F.sigmoid(score1)) - torch.log((1 - F.sigmoid(score2))))
 
-def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"): #overwrite parrent function
+def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax", n_query = 15, n_way = 5, n_support = 5): #overwrite parrent function
     correct = 0
     count = 0
     teacher_acc_all = []
 
-
     iter_num = len(novel_loader) 
     for i, (x,_) in enumerate(novel_loader):
         print i
-        print x.size()
         start = time.time()
         ###############################################################################################
         if params.dataset == "omniglot_to_emnist":
-            student           = knowledge(  backbone.Conv4S_noflatten)
+            student = backbone.Conv4S_noflatten()
         else:
-            student           = knowledge(  backbone.ResNet18_noflatten)
- 
+            student = backbone.ResNet18_noflatten()
+
         method = "baseline"
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, method)
         if params.train_aug:
             checkpoint_dir += '_aug'
-        print checkpoint_dir
 
-        params.save_iter = 399
+        if params.dataset == "omniglot_to_emnist":
+            params.save_iter = 4
+        else:
+            params.save_iter = 399
+
         if params.save_iter != -1:
             modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
         elif params.method in ['baseline', 'baseline++'] :
@@ -83,62 +84,90 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
 
         tmp = torch.load(modelfile)
         state = tmp['state']
-        state = {k: v for k, v in state.items() if 'classifier' not in k}
+
+        state_keys = list(state.keys())
+        for i, key in enumerate(state_keys):
+            if "feature." in key:
+                newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
+                state[newkey] = state.pop(key)
+            else:
+                state.pop(key)
+
         student.load_state_dict(state)
 
         if params.dataset == "omniglot_to_emnist":
-            partial = nn.Sequential(*[student.feature.trunk[i] for i in range(3)])
+            partial = nn.Sequential(*[student.trunk[i] for i in range(3)])
         else:
-            partial = nn.Sequential(*[student.feature.trunk[i] for i in range(11)])
+            partial = nn.Sequential(*[student.trunk[i] for i in range(11)])
 
         ###############################################################################################
-        student.n_query = x.size(1) - student.n_support
+        n_query = x.size(1) - n_support
         x = x.cuda()
         x_var = Variable(x)
 
-        x_a_i = x_var[:,:student.n_support,:,:,:].contiguous().view( student.n_way* student.n_support, *x.size()[2:]) 
-        x_b_i = x_var[:, student.n_support:,:,:,:].contiguous().view( student.n_way* student.n_query,   *x.size()[2:]) 
+        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) 
+        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) 
 
-        y_a_i = Variable( torch.from_numpy( np.repeat(range( student.n_way ), student.n_support ) )).cuda()
+        y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda()
         batch_size = 4
-        support_size = student.n_way * student.n_support
+        support_size = n_way * n_support
 
         if loss_type == 'softmax':
 
             if params.dataset == "omniglot_to_emnist":
                 feature_transformation =  nn.Sequential(
-                    student.feature.trunk[3],
+                    student.trunk[3],
                     backbone.Flatten()).cuda()
             else:
                 feature_transformation =  nn.Sequential(
-                    student.feature.trunk[11],
+                    student.trunk[11],
                     nn.AvgPool2d(7),
                     backbone.Flatten()).cuda()
 
             feature = nn.Sequential(
                 partial,
             ).cuda()
-            
+
             feature_flatten = nn.Sequential(
                 nn.AvgPool2d(7),
                 backbone.Flatten())       
 
-            model_classifier = nn.Linear(512, student.n_way).cuda()
+            if params.dataset == "omniglot_to_emnist":
+                model_classifier = nn.Linear(64, n_way).cuda()
+            else:
+                model_classifier = nn.Linear(512, n_way).cuda()
+
             model_classifier.bias.data.fill_(0)
 
-            domain_discriminator1 = nn.Sequential(
-                nn.Linear(512, 256),
-                nn.ReLU(),
-                nn.Linear(256, 1)
-            ) 
-            domain_discriminator1.cuda()
 
-            domain_discriminator2 = nn.Sequential(
-                nn.Linear(512, 256),
-                nn.ReLU(),
-                nn.Linear(256, 1)
-            ) 
-            domain_discriminator2.cuda()
+            if params.dataset == "omniglot_to_emnist":
+                domain_discriminator1 = nn.Sequential(
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 1)
+                ) 
+                domain_discriminator1.cuda()
+                domain_discriminator2 = nn.Sequential(
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 1)
+                ) 
+                domain_discriminator2.cuda()
+
+            else:
+                domain_discriminator1 = nn.Sequential(
+                    nn.Linear(512, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 1)
+                ) 
+                domain_discriminator1.cuda()
+
+                domain_discriminator2 = nn.Sequential(
+                    nn.Linear(512, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 1)
+                ) 
+                domain_discriminator2.cuda()
 
         elif loss_type == 'dist': #Baseline ++
             student.classifier = backbone.distLinear(student.feature.final_feat_dim, student.n_way).cuda()
@@ -156,6 +185,13 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
         domain_opt2 = torch.optim.SGD(domain_discriminator2.parameters(), lr=0.01)
 
         ###############################################################################################
+        for i, (x_,y_) in enumerate(base_loader):
+            x = x_
+            y = y_  
+            break
+
+        total_epoch = 100
+        alpha = 0.05
 
         feature.train()
         feature_transformation.train()
@@ -164,12 +200,7 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
         domain_discriminator1.train()
         domain_discriminator2.train()
 
-        for i, (x_,y_) in enumerate(base_loader):
-            x = x_
-            y = y_  
-            break
-
-        for epoch in range(100):
+        for epoch in range(total_epoch):
             x = Variable(x.cuda())
             y = Variable(y.cuda())
 
@@ -180,6 +211,7 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
 
                 domain_opt1.zero_grad()
                 domain_opt2.zero_grad()
+                
                 feature_opt.zero_grad()
                 classifier_opt.zero_grad()
                 feature_transformation_opt.zero_grad()
@@ -190,16 +222,27 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
                 source_batch = x[selected_id]
 
                 y_batch = y_a_i[selected_id] 
-
                 #####################################
-                
-                target_feature = feature(z_batch)
+                if params.dataset in ["omniglot_to_emnist"]:
+                    z_batch = z_batch[:,0:1,:,:]
+                    target_feature = feature(z_batch)
+                else:
+                    target_feature = feature(z_batch)
+               
                 target_feature_transformed = feature_transformation(target_feature)
+
                 outputs = model_classifier(target_feature_transformed)
                 
                 #####################################
-                
+        
+                if params.dataset in ["omniglot_to_emnist"]:
+                    source_batch = source_batch[:,0:1,:,:]
+                    source_feature = feature(source_batch)
+                else:
+                    source_feature = feature(source_batch)
+
                 source_feature = feature(source_batch) 
+
                 #####################################
                 source_feature = feature_flatten(source_feature)
                 target_feature = feature_flatten(target_feature)
@@ -212,18 +255,18 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
                 source_score2 = domain_discriminator2(source_feature)
 
                 ###################################################################
-                loss_domain_classifier1 =  0.1*loss_domain(source_score, target_score)
+                loss_domain_classifier1 =  alpha*loss_domain(source_score, target_score)
 
                 loss_domain_classifier1.backward(retain_graph=True)
                 domain_opt1.step()
 
-                loss_domain_classifier2 =  0.1*loss_domain(target_score2, source_score2)
+                loss_domain_classifier2 =  alpha*loss_domain(target_score2, source_score2)
                 loss_domain_classifier2.backward(retain_graph=True)
                 domain_opt2.step()
 
-                domain_feature1 = 0.1*loss_domain(target_score, source_score)
-                domain_feature2 = 0.1*loss_domain(source_score2, target_score2)
-            
+                domain_feature1 = alpha*loss_domain(target_score, source_score)
+                domain_feature2 = alpha*loss_domain(source_score2, target_score2)
+                
                 loss = loss_fn(outputs, y_batch)
                 loss = loss + domain_feature1
 
@@ -234,21 +277,38 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
                 domain_feature2.backward()
                 feature_transformation_opt.step()
 
-            outputs = feature(x_a_i)
+            
+            if params.dataset in ["omniglot_to_emnist"]:
+                outputs = x_a_i[:,0:1,:,:]
+                outputs = feature(outputs)
+            else:
+                outputs = feature(x_a_i)
+
             outputs = feature_transformation(outputs)
-            z_support  = outputs.view(student.n_way, student.n_support, -1 ) # 5 * 5 * 512
-            z_proto    = z_support.mean(1).repeat(1, student.n_support).view(-1, 512) # 5 * 512
+            z_support  = outputs.view(n_way, n_support, -1 ) # 5 * 5 * 512
+            if params.dataset in ["omniglot_to_emnist"]:
+                z_proto    = z_support.mean(1).repeat(1, n_support).view(-1, 64) # 5 * 512
+            else:
+                z_proto    = z_support.mean(1).repeat(1, n_support).view(-1, 512) # 5 * 512
+           
+            feature_transformation_opt.zero_grad()
             feature_opt.zero_grad()
-            loss = student.n_way * student.n_support * loss_variation(outputs, z_proto)
+            loss = n_way * n_support * loss_variation(outputs, z_proto)
             loss.backward()
             feature_opt.step()
-        
+            feature_transformation_opt.step()
+            
 
-        outputs = feature(x_a_i)
+        if params.dataset in ["omniglot_to_emnist"]:
+            outputs = x_a_i[:,0:1,:,:]
+            outputs = feature(outputs)
+        else:
+            outputs = feature(x_a_i)
+
         outputs = feature_transformation(outputs)
         scores = model_classifier(outputs)
 
-        y_query = np.repeat(range( student.n_way ), student.n_support )
+        y_query = np.repeat(range( n_way ), n_support )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
         topk_ind = topk_labels.cpu().numpy()
         
@@ -261,11 +321,15 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
         feature_transformation.eval()
         model_classifier.eval()
 
-        outputs = feature(x_b_i)
+        if params.dataset in ["omniglot_to_emnist"]:
+            outputs = x_b_i[:,0:1,:,:]
+            outputs = feature(outputs)
+        else:
+            outputs = feature(x_b_i)
         outputs = feature_transformation(outputs)
         scores = model_classifier(outputs)
 
-        y_query = np.repeat(range( student.n_way ), student.n_query )
+        y_query = np.repeat(range(n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
         topk_ind = topk_labels.cpu().numpy()
 
@@ -304,7 +368,7 @@ if __name__=='__main__':
 
 
     if 'Conv' in params.model:
-        if params.dataset in ['omniglot', 'cross_char']:
+        if params.dataset in ['omniglot', 'omniglot_to_emnist']:
             image_size = 28
         else:
             image_size = 84
@@ -319,43 +383,42 @@ if __name__=='__main__':
 
     if params.method in ['baseline', 'baseline++'] :
        
-        if params.dataset not in ["caltech256_to_cifar100", "cifar100_to_caltech256"]:
-            base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
+        iter_num = 600
+        few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
+        datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
+       
+        split = "novel"
+
+        if params.dataset == 'miniImageNet_to_CUB':
+            base_file = configs.data_dir['miniImagenet'] + 'all.json' 
+            novel_file   = configs.data_dir['CUB'] + split +'.json' 
+        elif params.dataset == 'CUB_to_miniImageNet':
+            base_file = configs.data_dir['CUB'] + 'base.json' 
+            novel_file   = configs.data_dir['miniImagenet'] + split +'.json' 
+        elif params.dataset == 'omniglot_to_emnist':
+            base_file = configs.data_dir['omniglot'] + 'noLatin.json' 
+            novel_file   = configs.data_dir['emnist'] + split +'.json' 
+
+        if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
+
+            base_datamgr    = SimpleDataManager(image_size, batch_size = 25)
             base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
-           
-            val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
-        
+            novel_loader    = datamgr.get_data_loader( novel_file, aug = False)
+
         elif params.dataset == "cifar100_to_caltech256":
-            base_datamgr    = cifar_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_datamgr        = caltech256_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            novel_loader        = base_datamgr.get_data_loader(aug =False)
+          
+            base_datamgr    = cifar_few_shot.SimpleDataManager(image_size, batch_size = 25)
             base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
 
-            val_datamgr     = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
-            
+
         elif params.dataset == "caltech256_to_cifar100":
-            base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_datamgr       = cifar_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            novel_loader       = base_datamgr.get_data_loader(aug =False)
+
+            base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 25)
             base_loader     = base_datamgr.get_data_loader( "base" , aug = True )
-
-            val_datamgr     = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
-
-
-        if params.dataset == 'caltech256_to_cifar100':
-            params.num_classes = 256
-            assert params.num_classes >= 256, 'class number need to be larger than max label id in base class'
-
-        if params.dataset == 'omniglot':
-            assert params.num_classes >= 4112, 'class number need to be larger than max label id in base class'
-        
-        if params.dataset == 'omniglot_to_emnist':
-            params.num_classes = 1597
-            assert params.num_classes >= 1597, 'class number need to be larger than max label id in base class'
-
-        if params.method == 'baseline':
-            model           = BaselineTrain( model_dict[params.model], params.num_classes)
-        elif params.method == 'baseline++':
-            model           = BaselineTrain( model_dict[params.model], params.num_classes, loss_type = 'dist')
 
     elif params.method in ['protonet','matchingnet','relationnet', 'relationnet_softmax', 'maml', 'maml_approx', 'featurenet', 'knowledge']:
         n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
@@ -473,4 +536,4 @@ if __name__=='__main__':
         else:
             raise ValueError('No warm_up file')
 
-    test_loop(novel_loader, base_loader, return_std = False)
+    test_loop(novel_loader, base_loader, return_std = False,  n_query = 15, **few_shot_params)

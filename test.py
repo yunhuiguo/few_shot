@@ -163,6 +163,7 @@ if __name__ == '__main__':
         for i in range(iter_num):
             print i
             acc = feature_evaluation(cl_data_file, model, n_query = 15, adaptation = params.adaptation, **few_shot_params)
+            print acc
             acc_all.append(acc)
 
         acc_all  = np.asarray(acc_all)

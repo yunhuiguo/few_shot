@@ -31,8 +31,7 @@ class knowledge(MetaTemplate):
     def forward(self,x):
 
         out  = self.feature.forward(x)
-        #if classifier:
-        #out  = self.classifier.forward(out)
+
         return out
 
     def set_forward(self, x, is_feature = False):

@@ -63,7 +63,6 @@ if __name__ == '__main__':
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
-
     elif params.dataset == "omniglot_to_emnist":
         loadfile  = configs.data_dir['emnist'] + split +'.json' 
 
@@ -118,6 +117,8 @@ if __name__ == '__main__':
     model = model.cuda()
     tmp = torch.load(modelfile)
     state = tmp['state']
+
+
     state_keys = list(state.keys())
     for i, key in enumerate(state_keys):
         if "feature." in key:
@@ -125,7 +126,7 @@ if __name__ == '__main__':
             state[newkey] = state.pop(key)
         else:
             state.pop(key)
-            
+        
     model.load_state_dict(state)
     model.eval()
 
