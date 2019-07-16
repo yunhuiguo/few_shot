@@ -24,9 +24,9 @@ class SimpleHDF5Dataset:
 
 def init_loader(filename):
     if os.path.isfile(filename):
-        print 'file %s found' % filename
+        print ('file %s found' % filename)
     else:
-        print 'file %s not found' % filename
+        print ('file %s not found' % filename)
 
     with h5py.File(filename, 'r') as f:
         fileset = SimpleHDF5Dataset(f)

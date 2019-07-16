@@ -4,12 +4,11 @@ import torch
 from PIL import Image
 import numpy as np
 import torchvision.transforms as transforms
-import additional_transforms as add_transforms
+from . import additional_transforms as add_transforms
 from abc import abstractmethod
 
 import os
 import glob
-from scipy.ndimage import imread
 from torchvision.datasets.utils import download_url, check_integrity
 import torch.utils.data as data
 
@@ -311,7 +310,7 @@ if __name__ == '__main__':
     cnt = 10
     for i, (data, label) in enumerate(base_loader):
         if i < cnt:
-            print data.size()
+            print(data.size())
         else:
             break
 

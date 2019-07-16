@@ -7,7 +7,7 @@ import random
 import re
 
 #cwd = os.getcwd() 
-data_path = '/ssd/adv_train_imagenet/dataset/train'
+data_path = '/mnt/data/ImageNet/train'
 savedir = './'
 dataset_list = ['base', 'val', 'novel']
 

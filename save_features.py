@@ -16,9 +16,13 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file, get_assigned_file 
 
-from datasets import svhn_few_shot, cifar_few_shot,  caltech256_few_shot
+from datasets import svhn_few_shot, cifar_few_shot,  caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot
 
-def save_features(model, data_loader, outfile ):
+
+from util import load_pretrained_model
+
+
+def save_features(model, data_loader, outfile):
     f = h5py.File(outfile, 'w')
     max_count = len(data_loader)*data_loader.batch_size
     all_labels = f.create_dataset('all_labels',(max_count,), dtype='i')
@@ -30,6 +34,7 @@ def save_features(model, data_loader, outfile ):
         x = x.cuda()
         x_var = Variable(x)
         feats = model(x_var)
+
         if all_feats is None:
             all_feats = f.create_dataset('all_feats', [max_count] + list( feats.size()[1:]) , dtype='f')
         all_feats[count:count+feats.size(0)] = feats.data.cpu().numpy()
@@ -63,6 +68,8 @@ if __name__ == '__main__':
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
+
+
     elif params.dataset == "omniglot_to_emnist":
         loadfile  = configs.data_dir['emnist'] + split +'.json' 
 
@@ -86,18 +93,22 @@ if __name__ == '__main__':
         outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + ".hdf5") 
 
 
-    if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
+    if params.dataset not in ["cifar100_to_cifar10", "caltech256_to_cifar100"]:
 
-        datamgr         = SimpleDataManager(image_size, batch_size = 64)
-        data_loader     = datamgr.get_data_loader(loadfile, aug = False)
+        #datamgr         = SimpleDataManager(image_size, batch_size = 64)
+        #data_loader     = datamgr.get_data_loader(loadfile, aug = False)
+
+        datamgr         = EuroSAT_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader(aug = False )
 
     elif params.dataset == "cifar100_to_caltech256":
         datamgr         = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader( "novel" , aug = False )
 
-    elif params.dataset == "caltech256_to_cifar100":
-        datamgr         = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
+    elif params.dataset == "cifar100_to_cifar10":
+        datamgr         = cifar_few_shot.SimpleDataManager("CIFAR10", 224, batch_size = 64)
         data_loader     = datamgr.get_data_loader( "novel" , aug = False )   
+
 
     if params.method in ['relationnet', 'relationnet_softmax']:
         if params.model == 'Conv4': 
@@ -113,8 +124,21 @@ if __name__ == '__main__':
        raise ValueError('MAML do not support save feature')
     else:
         model = model_dict[params.model]()
+    
 
     model = model.cuda()
+    '''
+    branch = 1
+    num_classes = 5
+    resume = "/home/ibm2019/branchnet/checkpoints/train_from_scratch_flowers/model_best.pth.tar"
+    #model = load_pretrained_model.load_multi_branch_pretrained_model(resume, 50, num_classes, False)
+    model = load_pretrained_model.load_trained_model(50, num_classes, False, resume=resume)
+
+    model = model.cuda()
+
+    print(model)
+    '''
+
     tmp = torch.load(modelfile)
     state = tmp['state']
 
@@ -126,11 +150,13 @@ if __name__ == '__main__':
             state[newkey] = state.pop(key)
         else:
             state.pop(key)
-        
     model.load_state_dict(state)
+
+    
     model.eval()
 
     dirname = os.path.dirname(outfile)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
+
     save_features(model, data_loader, outfile)

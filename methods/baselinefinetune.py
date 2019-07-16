@@ -30,6 +30,7 @@ class BaselineFinetune(MetaTemplate):
         elif self.loss_type == 'dist':        
             linear_clf = backbone.distLinear(self.feat_dim, self.n_way)
         
+
         linear_clf = linear_clf.cuda()
         set_optimizer = torch.optim.SGD(linear_clf.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
 

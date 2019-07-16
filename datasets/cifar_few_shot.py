@@ -4,14 +4,15 @@ import torch
 from PIL import Image
 import numpy as np
 import torchvision.transforms as transforms
-import additional_transforms as add_transforms
+from . import additional_transforms as add_transforms
 from abc import abstractmethod
 from torchvision.datasets import CIFAR100, CIFAR10
 
 identity = lambda x:x
 class SimpleDataset:
-    def __init__(self, mode, transform, target_transform=identity):
+    def __init__(self, mode, dataset, transform, target_transform=identity):
         self.transform = transform
+        self.dataset = dataset
         self.target_transform = target_transform
 
         self.meta = {}
@@ -19,21 +20,29 @@ class SimpleDataset:
         self.meta['image_names'] = []
         self.meta['image_labels'] = []
 
-        d = CIFAR100("./", train=True, download=True)
-        for i, (data, label) in enumerate(d):
-            if mode == "base":
-                if label % 3 == 0:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)
-            elif mode == "val":
-                if label % 3 == 1:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)           
-            else:
-                if label % 3 == 2:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)      
+        if self.dataset == "CIFAR100":
+            d = CIFAR100("./", train=True, download=True)
+            for i, (data, label) in enumerate(d):
+                if mode == "base":
+                    if label % 3 == 0:
+                        self.meta['image_names'].append(data)
+                        self.meta['image_labels'].append(label)
+                elif mode == "val":
+                    if label % 3 == 1:
+                        self.meta['image_names'].append(data)
+                        self.meta['image_labels'].append(label)           
+                else:
+                    if label % 3 == 2:
+                        self.meta['image_names'].append(data)
+                        self.meta['image_labels'].append(label)  
 
+        elif self.dataset == "CIFAR10":
+            d = CIFAR10("./", train=True, download=True)
+
+            for i, (data, label) in enumerate(d):
+                if mode == "novel":
+                    self.meta['image_names'].append(data)
+                    self.meta['image_labels'].append(label)  
 
     def __getitem__(self, i):
 
@@ -47,10 +56,11 @@ class SimpleDataset:
 
 
 class SetDataset:
-    def __init__(self, mode, batch_size, transform):
+    def __init__(self, mode, dataset, batch_size, transform):
 
         self.sub_meta = {}
         self.cl_list = range(100)
+        self.dataset = dataset
 
         if mode == "base":
             type_ = 0
@@ -63,8 +73,14 @@ class SetDataset:
             if cl % 3 == type_:
                 self.sub_meta[cl] = []
 
-        d = CIFAR100("./", train=True, download=True)
+        if self.dataset == "CIFAR100":
+            d = CIFAR100("./", train=True, download=True)
+        elif self.dataset == "CIFAR10":
+            d = CIFAR10("./", train=True, download=True)
+
+
         for i, (data, label) in enumerate(d):
+            print (label)
             if label % 3 == type_:
                 self.sub_meta[label].append(data)
     
@@ -153,14 +169,15 @@ class DataManager(object):
         pass 
 
 class SimpleDataManager(DataManager):
-    def __init__(self, image_size, batch_size):        
+    def __init__(self, dataset, image_size, batch_size):        
         super(SimpleDataManager, self).__init__()
         self.batch_size = batch_size
         self.trans_loader = TransformLoader(image_size)
+        self.dataset = dataset
 
     def get_data_loader(self, mode, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
-        dataset = SimpleDataset(mode, transform)
+        dataset = SimpleDataset(mode, self.dataset, transform)
 
         data_loader_params = dict(batch_size = self.batch_size, shuffle = True, num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
@@ -168,19 +185,20 @@ class SimpleDataManager(DataManager):
         return data_loader
 
 class SetDataManager(DataManager):
-    def __init__(self, mode, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
+    def __init__(self, mode, dataset, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
         super(SetDataManager, self).__init__()
         self.image_size = image_size
         self.n_way = n_way
         self.batch_size = n_support + n_query
         self.n_eposide = n_eposide
         self.mode = mode
+        self.dataset = dataset
 
         self.trans_loader = TransformLoader(image_size)
 
     def get_data_loader(self, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
-        dataset = SetDataset(self.mode, self.batch_size, transform)
+        dataset = SetDataset(self.mode, self.dataset, self.batch_size, transform)
         sampler = EpisodicBatchSampler(len(dataset), self.n_way, self.n_eposide )  
         data_loader_params = dict(batch_sampler = sampler,  num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
@@ -189,18 +207,18 @@ class SetDataManager(DataManager):
 if __name__ == '__main__':
 
     train_few_shot_params   = dict(n_way = 5, n_support = 5) 
-    base_datamgr            = SetDataManager('novel', 224, n_query = 16)
+    base_datamgr            = SetDataManager('novel', "CIFAR100", 224, n_query = 16)
     base_loader             = base_datamgr.get_data_loader(aug = True)
 
-    cnt = 10
+    cnt = 1
     for i, (x, label) in enumerate(base_loader):
         if i < cnt:
-            print label
+            print(label)
         else:
             break
 
     '''
-    base_datamgr  = SimpleDataManager(224, batch_size = 16)
+    base_datamgr  = SimpleDataManager(224, "CIFAR100", batch_size = 16)
 
     base_loader, classes     = base_datamgr.get_data_loader( "base" , aug = True )
     print classes

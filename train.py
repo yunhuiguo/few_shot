@@ -19,7 +19,10 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file  
 
-from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot
+
+
+#from utils import load_pretrained_model
 
 def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params):    
     if optimization == 'Adam':
@@ -54,9 +57,9 @@ if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
 
-    if params.dataset not in ['cifar100_to_caltech256', 'caltech256_to_cifar100']:
+    if params.dataset not in ['cifar100_to_cifar10', 'caltech256_to_cifar100']:
 
-        if params.dataset == 'miniImageNet_to_CUB':
+        if params.dataset == 'miniImageNet_to_ISIC':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
             val_file   = configs.data_dir['CUB'] + 'val.json' 
 
@@ -80,6 +83,7 @@ if __name__=='__main__':
         assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
         params.model = 'Conv4S'
 
+
     optimization = 'Adam'
     if params.method in ['baseline', 'baseline++'] :
 
@@ -91,11 +95,11 @@ if __name__=='__main__':
             val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
             val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
         
-        elif params.dataset == "cifar100_to_caltech256":
-            base_datamgr    = cifar_few_shot.SimpleDataManager(image_size, batch_size = 16)
+        elif params.dataset == "cifar100_to_cifar10":
+            base_datamgr    = cifar_few_shot.SimpleDataManager(224, "CIFAR100", batch_size = 16)
             base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
 
-            val_datamgr     = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
+            val_datamgr     = caltech256_few_shot.SimpleDataManager(224, "CIFAR10", batch_size = 64)
             val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
             
         elif params.dataset == "caltech256_to_cifar100":
@@ -117,10 +121,15 @@ if __name__=='__main__':
             params.num_classes = 1597
             assert params.num_classes >= 1597, 'class number need to be larger than max label id in base class'
 
+
         if params.method == 'baseline':
             model           = BaselineTrain( model_dict[params.model], params.num_classes)
+            #net = load_pretrained_model.load_multi_branch_pretrained_model(resume, 50, )
+            #model           = BaselineTrain( net, params.num_classes)
+        
         elif params.method == 'baseline++':
             model           = BaselineTrain( model_dict[params.model], params.num_classes, loss_type = 'dist')
+
 
     elif params.method in ['protonet','matchingnet','relationnet', 'relationnet_softmax', 'maml', 'maml_approx']:
         n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
@@ -179,6 +188,7 @@ if __name__=='__main__':
     else:
        raise ValueError('Unknown method')
 
+
     model = model.cuda()
 
     params.checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)
@@ -192,32 +202,6 @@ if __name__=='__main__':
 
     start_epoch = params.start_epoch
     stop_epoch = params.stop_epoch
-    if params.method == 'maml' or params.method == 'maml_approx' :
-        stop_epoch = params.stop_epoch * model.n_task #maml use multiple tasks in one update 
 
-    if params.resume:
-        resume_file = get_resume_file(params.checkpoint_dir)
-        if resume_file is not None:
-            tmp = torch.load(resume_file)
-            start_epoch = tmp['epoch']+1
-            model.load_state_dict(tmp['state'])
-    elif params.warmup: #We also support warmup from pretrained baseline feature, but we never used in our paper
-        baseline_checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, 'baseline')
-        if params.train_aug:
-            baseline_checkpoint_dir += '_aug'
-        warmup_resume_file = get_resume_file(baseline_checkpoint_dir)
-        tmp = torch.load(warmup_resume_file)
-        if tmp is not None: 
-            state = tmp['state']
-            state_keys = list(state.keys())
-            for i, key in enumerate(state_keys):
-                if "feature." in key:
-                    newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
-                    state[newkey] = state.pop(key)
-                else:
-                    state.pop(key)
-            model.feature.load_state_dict(state)
-        else:
-            raise ValueError('No warm_up file')
 
     model = train(base_loader, val_loader,  model, optimization, start_epoch, stop_epoch, params)

@@ -4,7 +4,7 @@ import torch
 from PIL import Image
 import numpy as np
 import torchvision.transforms as transforms
-import additional_transforms as add_transforms
+#import additional_transforms as add_transforms
 from abc import abstractmethod
 from torchvision.datasets import SVHN
 
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     cnt = 10
     for i, (x, label) in enumerate(base_loader):
         if i < cnt:
-            print x.size()
-            print label
+            print (x.size())
+            print (label)
         else:
             break
 
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     cnt = 10
     for i, (data, label) in enumerate(base_loader):
         if i < cnt:
-            print label
+            print (label)
         else:
             break
 

@@ -22,7 +22,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file , get_assigned_file
 
-from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot
 
 def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, adaptation = False):
     class_list = cl_data_file.keys()
@@ -59,6 +59,7 @@ if __name__ == '__main__':
 
     if params.method == 'baseline':
         model           = BaselineFinetune( model_dict[params.model], **few_shot_params )
+
     elif params.method == 'baseline++':
         model           = BaselineFinetune( model_dict[params.model], loss_type = 'dist', **few_shot_params )
     elif params.method == 'protonet':
@@ -92,6 +93,8 @@ if __name__ == '__main__':
     split = params.split
     if params.dataset == "CUB_to_miniImageNet":
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
+
+
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
     elif params.dataset == "omniglot_to_emnist":
@@ -132,6 +135,7 @@ if __name__ == '__main__':
 
             datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
             
+
             if params.dataset == 'miniImageNet_to_CUB':
                 loadfile   = configs.data_dir['CUB'] + split +'.json'
             elif params.dataset == "CUB_to_miniImageNet":
@@ -141,15 +145,19 @@ if __name__ == '__main__':
             else: 
                 loadfile    = configs.data_dir[params.dataset] + split + '.json'
 
-            novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
+            #novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
+
+            datamgr             = EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            novel_loader        = datamgr.get_data_loader(aug =False)
+          
 
         elif params.dataset == "cifar100_to_caltech256":
             datamgr             = caltech256_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
-            novel_loader        = base_datamgr.get_data_loader(aug =False)
+            novel_loader        = datamgr.get_data_loader(aug =False)
           
         elif params.dataset == "caltech256_to_cifar100":
             datamgr            = cifar_few_shot.SetDataManager('novel', image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
-            novel_loader       = base_datamgr.get_data_loader(aug =False)
+            novel_loader       = datamgr.get_data_loader(aug =False)
 
         if params.adaptation:
             model.task_update_num = 100 #We perform adaptation on MAML simply by updating more times.
