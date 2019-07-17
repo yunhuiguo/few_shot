@@ -252,13 +252,10 @@ class knowledge(MetaTemplate):
         acc_all = []
         iter_num = len(test_loader) 
         for i, (x,_) in enumerate(test_loader):
-            print i
             self.n_query = x.size(1) - self.n_support
             assert self.n_way  ==  x.size(0), "MAML do not support way change"
             correct_this, count_this = self.correct(x)
-            print "test"
-            print correct_this/ count_this *100
-            print "\n"
+
 
             acc_all.append(correct_this/ count_this *100 )
 

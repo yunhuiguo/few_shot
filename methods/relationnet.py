@@ -32,7 +32,8 @@ class RelationNet(MetaTemplate):
         z_proto_ext = z_proto.unsqueeze(0).repeat(self.n_query* self.n_way,1,1,1,1)
         z_query_ext = z_query.unsqueeze(0).repeat( self.n_way,1,1,1,1)
         z_query_ext = torch.transpose(z_query_ext,0,1)
-        extend_final_feat_dim = self.feat_dim.copy()
+
+        extend_final_feat_dim = self.feat_dim[:]
         extend_final_feat_dim[0] *= 2
         relation_pairs = torch.cat((z_proto_ext,z_query_ext),2).view(-1, *extend_final_feat_dim)
         relations = self.relation_module(relation_pairs).view(-1, self.n_way)

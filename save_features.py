@@ -16,7 +16,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file, get_assigned_file 
 
-from datasets import svhn_few_shot, cifar_few_shot,  caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot
+from datasets import svhn_few_shot, cifar_few_shot,  caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
 
 from util import load_pretrained_model
@@ -98,7 +98,7 @@ if __name__ == '__main__':
         #datamgr         = SimpleDataManager(image_size, batch_size = 64)
         #data_loader     = datamgr.get_data_loader(loadfile, aug = False)
 
-        datamgr         = EuroSAT_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        datamgr         = ISIC_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader(aug = False )
 
     elif params.dataset == "cifar100_to_caltech256":

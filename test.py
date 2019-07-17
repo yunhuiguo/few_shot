@@ -22,7 +22,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file , get_assigned_file
 
-from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
 def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, adaptation = False):
     class_list = cl_data_file.keys()
@@ -94,7 +94,6 @@ if __name__ == '__main__':
     if params.dataset == "CUB_to_miniImageNet":
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
 
-
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
     elif params.dataset == "omniglot_to_emnist":
@@ -135,7 +134,7 @@ if __name__ == '__main__':
 
             datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
             
-
+            '''
             if params.dataset == 'miniImageNet_to_CUB':
                 loadfile   = configs.data_dir['CUB'] + split +'.json'
             elif params.dataset == "CUB_to_miniImageNet":
@@ -144,10 +143,12 @@ if __name__ == '__main__':
                 loadfile  = configs.data_dir['emnist'] + split +'.json' 
             else: 
                 loadfile    = configs.data_dir[params.dataset] + split + '.json'
-
+            '''
             #novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
 
             datamgr             = EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            
+            print("ok")
             novel_loader        = datamgr.get_data_loader(aug =False)
           
 
@@ -160,7 +161,9 @@ if __name__ == '__main__':
             novel_loader       = datamgr.get_data_loader(aug =False)
 
         if params.adaptation:
+            print ("true")
             model.task_update_num = 100 #We perform adaptation on MAML simply by updating more times.
+
         model.eval()
         acc_mean, acc_std = model.test_loop( novel_loader, return_std = True)
 

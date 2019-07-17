@@ -13,48 +13,6 @@ from torchvision.datasets import ImageFolder
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-'''
-class CustomDatasetFromImages(Dataset):
-    def __init__(self, image_path = "/mnt/data/few_shot/EuroSAT/2750/"):
-        """
-        Args:
-            csv_path (string): path to csv file
-            img_path (string): path to the folder where images are
-            transform: pytorch transforms for transforms and tensor conversion
-        """
-
-        self.img_path = image_path
-        self.csv_path = csv_path
-
-        # Read the csv file
-        self.data_info = pd.read_csv(csv_path, skiprows=[0], header=None)
-
-        # First column contains the image paths
-        self.image_name = np.asarray(self.data_info.iloc[:, 0])
-
-        self.labels = np.asarray(self.data_info.iloc[:, 1:])
-        self.labels = (self.labels!=0).argmax(axis=1)
-        # Calculate len
-        self.data_len = len(self.data_info.index)
-
-    def __getitem__(self, index):
-        # Get image name from the pandas df
-        single_image_name = self.image_name[index]
-        # Open image
-        img_as_img = Image.open(self.img_path +  single_image_name + ".jpg")
-
-        # Transform image to tensor
-        #img_as_tensor = self.to_tensor(img_as_img)
-
-        # Get label(class) of the image based on the cropped pandas column
-        single_image_label = self.labels[index]
-
-        return (img_as_img, single_image_label)
-
-    def __len__(self):
-        return self.data_len
-'''
-
 
 identity = lambda x:x
 class SimpleDataset:
@@ -68,8 +26,7 @@ class SimpleDataset:
         self.meta['image_labels'] = []
 
 
-        d = ImageFolder("/mnt/data/few_shot/EuroSAT/2750/")
-
+        d = ImageFolder("/mnt/data/few_shot/CropDisease/dataset/train/")
 
         for i, (data, label) in enumerate(d):
             self.meta['image_names'].append(data)
@@ -90,12 +47,13 @@ class SetDataset:
     def __init__(self, batch_size, transform):
 
         self.sub_meta = {}
-        self.cl_list = range(10)
+        self.cl_list = range(38)
 
         for cl in self.cl_list:
             self.sub_meta[cl] = []
 
-        d = ImageFolder("/mnt/data/few_shot/EuroSAT/2750/")
+        d = ImageFolder("/mnt/data/few_shot/CropDisease/dataset/train/")
+
 
         for i, (data, label) in enumerate(d):
             self.sub_meta[label].append(data)
