@@ -20,7 +20,7 @@ class SimpleDataset:
         self.meta['image_names'] = []
         self.meta['image_labels'] = []
 
-        if self.dataset == "CIFAR100":
+        if self.dataset is "CIFAR100":
             d = CIFAR100("./", train=True, download=True)
             for i, (data, label) in enumerate(d):
                 if mode == "base":
@@ -36,7 +36,7 @@ class SimpleDataset:
                         self.meta['image_names'].append(data)
                         self.meta['image_labels'].append(label)  
 
-        elif self.dataset == "CIFAR10":
+        elif self.dataset is "CIFAR10":
             d = CIFAR10("./", train=True, download=True)
 
             for i, (data, label) in enumerate(d):

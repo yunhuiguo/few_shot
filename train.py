@@ -24,7 +24,7 @@ from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_fe
 
 #from utils import load_pretrained_model
 
-def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params):    
+def train(base_loader, model, optimization, start_epoch, stop_epoch, params):    
     if optimization == 'Adam':
         optimizer = torch.optim.Adam(model.parameters())
     else:
@@ -34,13 +34,15 @@ def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch,
 
     for epoch in range(start_epoch,stop_epoch):
         model.train()
+
         model.train_loop(epoch, base_loader,  optimizer ) #model are called by reference, no need to return 
         model.eval()
 
         if not os.path.isdir(params.checkpoint_dir):
             os.makedirs(params.checkpoint_dir)
 
-        acc = model.test_loop( val_loader)
+        acc = -1
+        #acc = model.test_loop( val_loader)
         if acc > max_acc : #for baseline and baseline++, we don't use validation here so we let acc = -1
             print("best model! save...")
             max_acc = acc
@@ -57,7 +59,7 @@ if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
 
-    if params.dataset not in ['cifar100_to_cifar10', 'caltech256_to_cifar100']:
+    if params.dataset not in ['cifar100', 'caltech256_to_cifar100']:
 
         if params.dataset == 'miniImageNet_to_ISIC':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
@@ -87,7 +89,7 @@ if __name__=='__main__':
     optimization = 'Adam'
     if params.method in ['baseline', 'baseline++'] :
 
-        if params.dataset not in ["caltech256_to_cifar100", "cifar100_to_caltech256"]:
+        if params.dataset not in ["caltech256_to_cifar100", "cifar100"]:
 
             base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
             base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
@@ -95,13 +97,14 @@ if __name__=='__main__':
             val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
             val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
         
-        elif params.dataset == "cifar100_to_cifar10":
-            base_datamgr    = cifar_few_shot.SimpleDataManager(224, "CIFAR100", batch_size = 16)
+        elif params.dataset == "cifar100":
+            base_datamgr    = cifar_few_shot.SimpleDataManager("CIFAR100", 224, batch_size = 16)
             base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
+            #val_datamgr     = caltech256_few_shot.SimpleDataManager(224, batch_size = 64)
+            #val_loader      = val_datamgr.get_data_loader( "val", aug = False)
+                
+            params.num_classes = 100
 
-            val_datamgr     = caltech256_few_shot.SimpleDataManager(224, "CIFAR10", batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
-            
         elif params.dataset == "caltech256_to_cifar100":
             base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 16)
             base_loader     = base_datamgr.get_data_loader( "base" , aug = True )
@@ -204,4 +207,5 @@ if __name__=='__main__':
     stop_epoch = params.stop_epoch
 
 
-    model = train(base_loader, val_loader,  model, optimization, start_epoch, stop_epoch, params)
+    #model = train(base_loader, val_loader,  model, optimization, start_epoch, stop_epoch, params)
+    model = train(base_loader, model, optimization, start_epoch, stop_epoch, params)

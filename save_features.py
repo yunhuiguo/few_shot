@@ -150,6 +150,8 @@ if __name__ == '__main__':
             state[newkey] = state.pop(key)
         else:
             state.pop(key)
+
+            
     model.load_state_dict(state)
 
     

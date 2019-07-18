@@ -122,7 +122,7 @@ class SimpleDataset:
         self.meta['image_names'] = []
         self.meta['image_labels'] = []
 
-        d = Caltech256(root='./', download=False)
+        d = Caltech256(root='./', download=True)
         for i, (data, label) in enumerate(d):
             if mode == "base":
                 if label % 3 == 0:

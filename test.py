@@ -146,7 +146,7 @@ if __name__ == '__main__':
             '''
             #novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
 
-            datamgr             = EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            datamgr             = ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             
             print("ok")
             novel_loader        = datamgr.get_data_loader(aug =False)
