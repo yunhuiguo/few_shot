@@ -29,7 +29,18 @@ import backbone
 
 from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
-from sklearn.neighbors import KNeighborsClassifier
+#from sklearn.neighbors import KNeighborsClassifier
+
+
+class Net(nn.Module):
+    def __init__(self, dim):
+        super(Net, self).__init__()
+        self.fc = nn.Linear(dim, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
 
 class TripletSelector(object):
     """
@@ -54,7 +65,6 @@ class AllTripletSelector(TripletSelector):
         super(AllTripletSelector, self).__init__()
 
     def get_triplets(self, embeddings, labels):
-        labels = labels.cpu().data.numpy()
         triplets = []
         for label in set(labels):
             label_mask = (labels == label)
@@ -106,7 +116,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
     acc_all = []
 
-    for i, (x,_) in enumerate(novel_loader):
+    for _, (x, _) in enumerate(novel_loader):
 
         start = time.time()
         ###############################################################################################
@@ -118,9 +128,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         if params.train_aug:
             checkpoint_dir += '_aug'
 
-
-        params.save_iter = 399
-
+        params.save_iter = -1
         if params.save_iter != -1:
             modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
         elif params.method in ['baseline', 'baseline++'] :
@@ -132,7 +140,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         state = tmp['state']
 
         state_keys = list(state.keys())
-        for i, key in enumerate(state_keys):
+        for _, key in enumerate(state_keys):
             if "feature." in key:
                 newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
                 state[newkey] = state.pop(key)
@@ -140,7 +148,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 state.pop(key)
 
         model.load_state_dict(state)
-
         margin = 1.0
         TripletSelector = AllTripletSelector()
 
@@ -159,14 +166,12 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         batch_size = 4
         support_size = n_way * n_support # 25
     
-
         ###############################################################################################
         model.cuda()
-        model.train()
+        model.eval()
 
-        x_a_i = Variable(x_a_i.cuda())
         y_a_i = Variable(y_a_i.cuda()).cpu().data.numpy()
-        
+
 
         x_a_embedding = model(x_a_i).cpu().data.numpy() # (25, 512)
        
@@ -180,67 +185,111 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         loss = TripletLoss(x_a_embedding, y_a_i)
         #print loss
+
         
-        '''
-        #KNN
+        embeddings = []
+        for idx, module in enumerate(model.trunk):
+            x_a_i = module(x_a_i)
+            if len(list(x_a_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
+                embeddings.append(embedding)
 
-        x_b_i = Variable(x_b_i.cuda())
-        x_b_embedding = model(x_b_i).cpu().data.numpy()
-        y_b_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_query ) )).cpu().data.numpy() # (75,)
+        embeddings = embeddings[4:-1]
+        embeddings = embeddings[::-1]
 
-        neigh = KNeighborsClassifier(n_neighbors=1)
-        neigh.fit(x_a_embedding, y_a_i)
-
-        s = neigh.score(x_b_embedding, y_b_i)
-        print(s)
-        acc_all.append(s)
-        '''
-
+        embeddings_set = torch.cat((embeddings[0], embeddings[1]), 1)
 
         '''
+        embeddings_set = embeddings[0]
+        embeddings_idx = [0]
+        
+        norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
+        embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
+        running_loss = TripletLoss( embedding_normalized, y_a_i)
+        print (running_loss)
+    
+
+        for idx, embedding in enumerate(embeddings[1:]):
+            tmp_embedding = torch.cat((embeddings_set, embedding), 1)
+
+            norm = tmp_embedding.norm(p=2, dim=1, keepdim=True)
+            embedding_normalized =  tmp_embedding.div(norm.expand_as(  tmp_embedding))
+
+            loss = TripletLoss(embedding_normalized , y_a_i)
+
+            if loss < running_loss:
+                embeddings_idx.append(idx+1)
+                embeddings_set = torch.cat((embeddings_set, embedding), 1)
+        
+    
+        norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
+        embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
+        running_loss = TripletLoss( embedding_normalized, y_a_i)
+        print (running_loss)
+        
+        embeddings_idx = [9-i for i in embeddings_idx]
+        '''
+
+        embeddings_test = []
+        for idx, module in enumerate(model.trunk):
+            x_b_i = module(x_b_i)
+
+            if len(list(x_b_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
+                #if idx in embeddings_idx:
+                embeddings_test.append(embedding)
+      
+
+        embeddings_test = embeddings_test[4:-1]
+        embeddings_test = embeddings_test[::-1]
+
+        embeddings_test = torch.cat((embeddings_test[0], embeddings_test[1]), 1)
+
+        #embeddings_test = torch.cat(embeddings_test, 1)
+    
+        net = Net(embeddings_set.size()[1]).cuda()
+        loss_fn = nn.CrossEntropyLoss().cuda()
+        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        total_epoch = 100
+
+
+        embeddings_set = Variable(embeddings_set.cuda())
+        y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
+
+
         for epoch in range(total_epoch):
-            x = Variable(x.cuda())
-            y = Variable(y.cuda())
-
-            loss_ = 0
             rand_id = np.random.permutation(support_size)
 
-            for i in range(0, support_size , batch_size):
+            for j in range(0, support_size, batch_size):
+                classifier_opt.zero_grad()
 
                 #####################################
-                selected_id = torch.from_numpy( rand_id[i: min(i+batch_size, support_size)]).cuda()
-                z_batch = x_a_i[selected_id]
-                source_batch = x[selected_id]
+                selected_id = torch.from_numpy( rand_id[j: min(j+batch_size, support_size)]).cuda()
+                z_batch = embeddings_set[selected_id]
 
                 y_batch = y_a_i[selected_id] 
                 #####################################
 
-                target_feature = feature(z_batch)
-               
-                outputs = model_classifier(target_feature_transformed)
-                
+                outputs = net(z_batch)            
                 #####################################
         
                 loss = loss_fn(outputs, y_batch)
-        '''
+                loss.backward()
+                classifier_opt.step()
 
 
+        embeddings_test = Variable(embeddings_test.cuda())
+        scores = net(embeddings_test)
 
-        '''
-        outputs = feature(x_a_i)
-
-        outputs = feature_transformation(outputs)
-        scores = model_classifier(outputs)
-
-        y_query = np.repeat(range( n_way ), n_support )
+        y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
         topk_ind = topk_labels.cpu().numpy()
         
         top1_correct = np.sum(topk_ind[:,0] == y_query)
         correct_this, count_this = float(top1_correct), len(y_query)
-        print "train"
-        print correct_this/ count_this *100
-        '''
+        print (correct_this/ count_this *100)
+        acc_all.append((correct_this/ count_this *100))
+
         ###############################################################################################
 
     acc_all  = np.asarray(acc_all)
@@ -265,9 +314,7 @@ if __name__=='__main__':
 
     n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
 
-   
     if params.method in ['baseline']:
-
         iter_num = 600
         few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
         datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
