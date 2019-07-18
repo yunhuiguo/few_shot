@@ -29,8 +29,7 @@ import backbone
 
 from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
-from sklearn.neighbors import KNeighborsClassifier
-
+#from sklearn.neighbors import KNeighborsClassifier
 
 
 class Net(nn.Module):
@@ -167,34 +166,26 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         batch_size = 4
         support_size = n_way * n_support # 25
     
-
         ###############################################################################################
         model.cuda()
         model.eval()
 
-        x_a_i = Variable(x_a_i.cuda())
-
-        x_b_i = Variable(x_b_i.cuda())
-
         y_a_i = Variable(y_a_i.cuda()).cpu().data.numpy()
        
-        '''
+        
         embeddings = []
         for idx, module in enumerate(model.trunk):
-            #print (idx) 0 - 9
             x_a_i = module(x_a_i)
             if len(list(x_a_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
-            else:
-                embedding =  x_a_i
+                embeddings.append(embedding)
 
-            embeddings.append(embedding)
-
-    
-        embeddings = embeddings[4:]
+        embeddings = embeddings[4:-1]
         embeddings = embeddings[::-1]
 
+        embeddings_set = torch.cat((embeddings[0], embeddings[1]), 1)
 
+        '''
         embeddings_set = embeddings[0]
         embeddings_idx = [0]
         
@@ -202,12 +193,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
         running_loss = TripletLoss( embedding_normalized, y_a_i)
         print (running_loss)
-        '''
+    
 
-        embeddings_set = model(x_a_i)
-        embeddings_test = model(x_b_i)
-
-        '''
         for idx, embedding in enumerate(embeddings[1:]):
             tmp_embedding = torch.cat((embeddings_set, embedding), 1)
 
@@ -224,11 +211,10 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
         embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
         running_loss = TripletLoss( embedding_normalized, y_a_i)
-        
         print (running_loss)
-        #KNN
+        
         embeddings_idx = [9-i for i in embeddings_idx]
-
+        '''
 
         embeddings_test = []
         for idx, module in enumerate(model.trunk):
@@ -236,34 +222,23 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
             if len(list(x_b_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
-            else:
-                embedding =  x_b_i
-
-            if idx in embeddings_idx:
+                #if idx in embeddings_idx:
                 embeddings_test.append(embedding)
       
+
+        embeddings_test = embeddings_test[4:-1]
         embeddings_test = embeddings_test[::-1]
 
+        embeddings_test = torch.cat((embeddings_test[0], embeddings_test[1]), 1)
+
         #embeddings_test = torch.cat(embeddings_test, 1)
-        '''
-        '''
-        y_b_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_query ) )).cpu().data.numpy() # (75,)
-        neigh = KNeighborsClassifier(n_neighbors=1)
-        neigh.fit(embeddings_set.cpu().data.numpy(), y_a_i)
-
-        s = neigh.score(embeddings_test.cpu().data.numpy(), y_b_i)
-        print(s)
-        acc_all.append(s)
-        '''
-
+    
         net = Net(embeddings_set.size()[1]).cuda()
         loss_fn = nn.CrossEntropyLoss().cuda()
         classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
         total_epoch = 100
 
 
-        #embeddings_set = embeddings[0]
-        #embeddings_test = embeddings_test[0]
         embeddings_set = Variable(embeddings_set.cuda())
         y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
 
@@ -271,7 +246,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         for epoch in range(total_epoch):
             rand_id = np.random.permutation(support_size)
 
-            for j in range(0, support_size , batch_size):
+            for j in range(0, support_size, batch_size):
                 classifier_opt.zero_grad()
 
                 #####################################

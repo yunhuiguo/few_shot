@@ -29,10 +29,6 @@ import backbone
 
 from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
-from sklearn.neighbors import KNeighborsClassifier
-
-
-
 def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax", n_query = 15, n_way = 5, n_support = 5): #overwrite parrent function
     correct = 0
     count = 0
@@ -74,7 +70,6 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
 
         model.load_state_dict(state)
 
-
         ###############################################################################################
         n_query = x.size(1) - n_support
         x = x.cuda()
@@ -90,21 +85,23 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
     
 
         ###############################################################################################
+        classifier = Net(embeddings_set.size()[1]).cuda()
+        loss_fn = nn.CrossEntropyLoss().cuda()
+
+        model_opt = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        total_epoch = 100
+    
         model.cuda()
         model.train()
-
-        x_a_i = Variable(x_a_i.cuda())
-        y_a_i = Variable(y_a_i.cuda()).cpu().data.numpy()       
-
-    
         for epoch in range(total_epoch):
-            x = Variable(x.cuda())
-            y = Variable(y.cuda())
 
-            loss_ = 0
             rand_id = np.random.permutation(support_size)
 
             for i in range(0, support_size , batch_size):
+
+                classifier_opt.zero_grad()
+                model_opt.zero_grad()
 
                 #####################################
                 selected_id = torch.from_numpy( rand_id[i: min(i+batch_size, support_size)]).cuda()
@@ -114,30 +111,29 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
                 y_batch = y_a_i[selected_id] 
                 #####################################
 
-                target_feature = feature(z_batch)
-               
-                outputs = model_classifier(target_feature_transformed)
+                feature = model(z_batch)
+                outputs = classifier(feature)
                 
                 #####################################
         
                 loss = loss_fn(outputs, y_batch)
+                loss.backward()
+                classifier_opt.step()
+                model_opt.step()
 
+        
+        feature = model(x_b_i)
+        scores = classifier(feature)
 
-        '''
-        outputs = feature(x_a_i)
-
-        outputs = feature_transformation(outputs)
-        scores = model_classifier(outputs)
-
-        y_query = np.repeat(range( n_way ), n_support )
+        y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
         topk_ind = topk_labels.cpu().numpy()
         
         top1_correct = np.sum(topk_ind[:,0] == y_query)
         correct_this, count_this = float(top1_correct), len(y_query)
-        print "train"
         print correct_this/ count_this *100
-        '''
+        acc_all.append((correct_this/ count_this *100))
+
         ###############################################################################################
 
     acc_all  = np.asarray(acc_all)
