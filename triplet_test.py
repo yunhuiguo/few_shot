@@ -31,8 +31,6 @@ from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_fe
 
 from sklearn.neighbors import KNeighborsClassifier
 
-
-
 class Net(nn.Module):
     def __init__(self, dim):
         super(Net, self).__init__()
@@ -41,72 +39,6 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.fc(x)
         return x
-
-
-class TripletSelector(object):
-    """
-    Implementation should return indices of anchors, positive and negative samples
-    return np array of shape [N_triplets x 3]
-    """
-
-    def __init__(self):
-        pass
-
-    def get_triplets(self, embeddings, labels):
-        raise NotImplementedError
-
-
-class AllTripletSelector(TripletSelector):
-    """
-    Returns all possible triplets
-    May be impractical in most cases
-    """
-
-    def __init__(self):
-        super(AllTripletSelector, self).__init__()
-
-    def get_triplets(self, embeddings, labels):
-        triplets = []
-        for label in set(labels):
-            label_mask = (labels == label)
-            label_indices = np.where(label_mask)[0]
-            if len(label_indices) < 2:
-                continue
-            negative_indices = np.where(np.logical_not(label_mask))[0]
-            anchor_positives = list(combinations(label_indices, 2))  # All anchor-positive pairs
-
-            # Add all negatives for all positive pairs
-            temp_triplets = [[anchor_positive[0], anchor_positive[1], neg_ind] for anchor_positive in anchor_positives
-                             for neg_ind in negative_indices]
-            triplets += temp_triplets
-
-        return torch.LongTensor(np.array(triplets))
-
-class OnlineTripletLoss(nn.Module):
-    """
-    Online Triplets loss
-    Takes a batch of embeddings and corresponding labels.
-    Triplets are generated using triplet_selector object that take embeddings and targets and return indices of
-    triplets
-    """
-
-    def __init__(self, margin, triplet_selector):
-        super(OnlineTripletLoss, self).__init__()
-        self.margin = margin
-        self.triplet_selector = triplet_selector
-
-    def forward(self, embeddings, target):
-
-        triplets = self.triplet_selector.get_triplets(embeddings, target)
-
-        if embeddings.is_cuda:
-            triplets = triplets.cuda()
-
-        ap_distances = (embeddings[triplets[:, 0]] - embeddings[triplets[:, 1]]).pow(2).sum(1)  # .pow(.5)
-        an_distances = (embeddings[triplets[:, 0]] - embeddings[triplets[:, 2]]).pow(2).sum(1)  # .pow(.5)
-        losses = F.relu(ap_distances - an_distances + self.margin)
-
-        return losses.mean()
 
 
 def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 15, n_way = 5, n_support = 5): #overwrite parrent function
@@ -148,11 +80,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
+        model.cuda()
         model.load_state_dict(state)
-        margin = 1.0
-        TripletSelector = AllTripletSelector()
 
-        TripletLoss = OnlineTripletLoss(margin, TripletSelector)
 
         ###############################################################################################
         n_query = x.size(1) - n_support
@@ -162,108 +92,24 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
 
-        y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
-
         batch_size = 4
         support_size = n_way * n_support # 25
     
 
         ###############################################################################################
-        model.cuda()
-        model.eval()
-
-        x_a_i = Variable(x_a_i.cuda())
-
-        x_b_i = Variable(x_b_i.cuda())
-
-        y_a_i = Variable(y_a_i.cuda()).cpu().data.numpy()
-       
-        '''
-        embeddings = []
-        for idx, module in enumerate(model.trunk):
-            #print (idx) 0 - 9
-            x_a_i = module(x_a_i)
-            if len(list(x_a_i.size())) == 4:
-                embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
-            else:
-                embedding =  x_a_i
-
-            embeddings.append(embedding)
-
-    
-        embeddings = embeddings[4:]
-        embeddings = embeddings[::-1]
-
-
-        embeddings_set = embeddings[0]
-        embeddings_idx = [0]
-        
-        norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
-        embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
-        running_loss = TripletLoss( embedding_normalized, y_a_i)
-        print (running_loss)
-        '''
+        model.eval()       
 
         embeddings_set = model(x_a_i)
         embeddings_test = model(x_b_i)
 
-        '''
-        for idx, embedding in enumerate(embeddings[1:]):
-            tmp_embedding = torch.cat((embeddings_set, embedding), 1)
+        feat_dim   = model.final_feat_dim
+        linear_clf = nn.Linear(feat_dim, n_way).cuda()
 
-            norm = tmp_embedding.norm(p=2, dim=1, keepdim=True)
-            embedding_normalized =  tmp_embedding.div(norm.expand_as(  tmp_embedding))
-
-            loss = TripletLoss(embedding_normalized , y_a_i)
-
-            if loss < running_loss:
-                embeddings_idx.append(idx+1)
-                embeddings_set = torch.cat((embeddings_set, embedding), 1)
-        
-    
-        norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
-        embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
-        running_loss = TripletLoss( embedding_normalized, y_a_i)
-        
-        print (running_loss)
-        #KNN
-        embeddings_idx = [9-i for i in embeddings_idx]
-
-
-        embeddings_test = []
-        for idx, module in enumerate(model.trunk):
-            x_b_i = module(x_b_i)
-
-            if len(list(x_b_i.size())) == 4:
-                embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
-            else:
-                embedding =  x_b_i
-
-            if idx in embeddings_idx:
-                embeddings_test.append(embedding)
-      
-        embeddings_test = embeddings_test[::-1]
-
-        #embeddings_test = torch.cat(embeddings_test, 1)
-        '''
-        '''
-        y_b_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_query ) )).cpu().data.numpy() # (75,)
-        neigh = KNeighborsClassifier(n_neighbors=1)
-        neigh.fit(embeddings_set.cpu().data.numpy(), y_a_i)
-
-        s = neigh.score(embeddings_test.cpu().data.numpy(), y_b_i)
-        print(s)
-        acc_all.append(s)
-        '''
-
-        net = Net(embeddings_set.size()[1]).cuda()
         loss_fn = nn.CrossEntropyLoss().cuda()
-        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        classifier_opt = torch.optim.SGD(linear_clf.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
         total_epoch = 100
 
 
-        #embeddings_set = embeddings[0]
-        #embeddings_test = embeddings_test[0]
         embeddings_set = Variable(embeddings_set.cuda())
         y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
 
@@ -281,7 +127,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 y_batch = y_a_i[selected_id] 
                 #####################################
 
-                outputs = net(z_batch)            
+                outputs = linear_clf(z_batch)            
                 #####################################
         
                 loss = loss_fn(outputs, y_batch)
@@ -290,7 +136,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
 
         embeddings_test = Variable(embeddings_test.cuda())
-        scores = net(embeddings_test)
+        scores = linear_clf(embeddings_test)
 
         y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
