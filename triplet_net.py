@@ -194,10 +194,11 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
                 embeddings.append(embedding)
 
-        embeddings = embeddings[4:-1]
-        embeddings = embeddings[::-1]
 
-        embeddings_set = torch.cat((embeddings[0], embeddings[1]), 1)
+        embeddings = embeddings[4:-1]
+
+        #embeddings_set = torch.cat((embeddings[-1], embeddings[-2]), 1)
+        embeddings_set = embeddings[-1]
 
         '''
         embeddings_set = embeddings[0]
@@ -221,7 +222,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 embeddings_idx.append(idx+1)
                 embeddings_set = torch.cat((embeddings_set, embedding), 1)
         
-    
         norm = embeddings_set.norm(p=2, dim=1, keepdim=True)
         embedding_normalized =  embeddings_set.div(norm.expand_as( embeddings_set))
         running_loss = TripletLoss( embedding_normalized, y_a_i)
@@ -241,9 +241,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
       
 
         embeddings_test = embeddings_test[4:-1]
-        embeddings_test = embeddings_test[::-1]
 
-        embeddings_test = torch.cat((embeddings_test[0], embeddings_test[1]), 1)
+        #embeddings_test = torch.cat((embeddings_test[-1], embeddings_test[-2]), 1)
+        embeddings_test = embeddings_test[-1]
 
         #embeddings_test = torch.cat(embeddings_test, 1)
     
@@ -333,7 +333,7 @@ if __name__=='__main__':
 
         if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
 
-            datamgr             = ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            datamgr             =  ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             novel_loader        = datamgr.get_data_loader(aug =False)
 
     #########################################################################
