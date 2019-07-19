@@ -29,6 +29,17 @@ import backbone
 
 from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, EuroSAT_few_shot, CropDisease_few_shot
 
+
+class Net(nn.Module):
+    def __init__(self, dim):
+        super(Net, self).__init__()
+        self.fc = nn.Linear(dim, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
+
 def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax", n_query = 15, n_way = 5, n_support = 5): #overwrite parrent function
     correct = 0
     count = 0
@@ -85,11 +96,12 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
     
 
         ###############################################################################################
-        classifier = Net(embeddings_set.size()[1]).cuda()
+        novel_classifier = Net(model.final_feat_dim).cuda()
         loss_fn = nn.CrossEntropyLoss().cuda()
 
         model_opt = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
-        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        novel_classifier_opt = torch.optim.SGD(novel_classifier.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+        
         total_epoch = 100
     
         model.cuda()
@@ -97,33 +109,30 @@ def test_loop(novel_loader, base_loader, return_std = False, loss_type="softmax"
         for epoch in range(total_epoch):
 
             rand_id = np.random.permutation(support_size)
-
             for i in range(0, support_size , batch_size):
-
-                classifier_opt.zero_grad()
+                novel_classifier_opt.zero_grad()
                 model_opt.zero_grad()
 
                 #####################################
                 selected_id = torch.from_numpy( rand_id[i: min(i+batch_size, support_size)]).cuda()
                 z_batch = x_a_i[selected_id]
-                source_batch = x[selected_id]
 
                 y_batch = y_a_i[selected_id] 
                 #####################################
 
                 feature = model(z_batch)
-                outputs = classifier(feature)
+                outputs = novel_classifier(feature)
                 
                 #####################################
         
                 loss = loss_fn(outputs, y_batch)
                 loss.backward()
-                classifier_opt.step()
+                novel_classifier_opt.step()
                 model_opt.step()
 
         
         feature = model(x_b_i)
-        scores = classifier(feature)
+        scores = novel_classifier(feature)
 
         y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
@@ -164,7 +173,7 @@ if __name__=='__main__':
        
         if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
 
-            datamgr             = ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+            datamgr             = CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             novel_loader        = datamgr.get_data_loader(aug =False)
 
 
