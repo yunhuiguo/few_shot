@@ -102,3 +102,4 @@ Time: 20190717-131323, Setting: miniImageNet_to_ISIC-novel-ResNet10-relationnet-
 Time: 20190717-131555, Setting: miniImageNet_to_ISIC-novel-ResNet10-relationnet-aug 5shot 5way_train 5way_test, Acc: 600 Test Acc = 61.31% +- 0.72% 
 Time: 20190717-132027, Setting: miniImageNet_to_ISIC-novel-ResNet10-relationnet-aug 5shot 5way_train 5way_test, Acc: 600 Test Acc = 68.99% +- 0.75% 
 Time: 20190717-134913, Setting: miniImageNet_to_CUB-novel-ResNet10-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 43.02% +- 0.61% 
+Time: 20190718-151253, Setting: miniImageNet_to_CUB-novel-ResNet10-baseline-aug 5shot 5way_test, Acc: 600 Test Acc = 43.45% +- 0.58% 

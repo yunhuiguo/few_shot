@@ -171,7 +171,21 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         model.eval()
 
         y_a_i = Variable(y_a_i.cuda()).cpu().data.numpy()
+
+
+        x_a_embedding = model(x_a_i).cpu().data.numpy() # (25, 512)
        
+        
+        for module in model.trunk:
+            print (module)
+
+        break
+
+
+
+        loss = TripletLoss(x_a_embedding, y_a_i)
+        #print loss
+
         
         embeddings = []
         for idx, module in enumerate(model.trunk):

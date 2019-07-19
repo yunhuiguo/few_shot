@@ -43,7 +43,6 @@ class BaselineTrain(nn.Module):
     def train_loop(self, epoch, train_loader, optimizer):
         print_freq = 10
         avg_loss=0
-
         for i, (x,y) in enumerate(train_loader):
             optimizer.zero_grad()
             loss = self.forward_loss(x, y)
@@ -51,7 +50,6 @@ class BaselineTrain(nn.Module):
             optimizer.step()
 
             avg_loss = avg_loss+loss.item()
-
             if i % print_freq==0:
                 #print(optimizer.state_dict()['param_groups'][0]['lr'])
                 print('Epoch {:d} | Batch {:d}/{:d} | Loss {:f} | Top1 Val {:f} | Top1 Avg {:f}'.format(epoch, i, len(train_loader), avg_loss/float(i+1), self.top1.val, self.top1.avg))
