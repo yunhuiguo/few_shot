@@ -65,7 +65,7 @@ if __name__=='__main__':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
             val_file   = configs.data_dir['CUB'] + 'val.json' 
 
-        elif params.dataset == 'CUB_to_miniImageNet':
+        elif params.dataset == 'CUB':
             base_file = configs.data_dir['CUB'] + 'base.json' 
             val_file   = configs.data_dir['miniImagenet'] + 'val.json' 
 
