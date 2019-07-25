@@ -3,6 +3,8 @@ cv/*
 *.t7
 dog_data/*
 test/*
+*.pyc
+*.pth
 *.tar.gz
 *.npy
 *.tar
