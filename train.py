@@ -19,7 +19,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file  
 
-from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot
+from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_few_shot, DTD_few_shot
 
 
 #from utils import load_pretrained_model
@@ -59,7 +59,7 @@ if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
 
-    if params.dataset not in ['caltech256', 'caltech256_to_cifar100']:
+    if params.dataset not in ['DTD', 'caltech256_to_cifar100']:
 
         if params.dataset == 'miniImageNet_to_ISIC':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
@@ -89,7 +89,7 @@ if __name__=='__main__':
     optimization = 'Adam'
     if params.method in ['baseline', 'baseline++'] :
 
-        if params.dataset not in ["caltech256", "cifar100"]:
+        if params.dataset not in ["DTD", "cifar100"]:
 
             base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
             base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
@@ -97,9 +97,9 @@ if __name__=='__main__':
             val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
             val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
         
-        elif params.dataset == "caltech256":
-            base_datamgr    = caltech256_few_shot.SimpleDataManager(224, batch_size = 16)
-            base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
+        elif params.dataset == "DTD":
+            base_datamgr    = DTD_few_shot.SimpleDataManager(224, batch_size = 16)
+            base_loader    = base_datamgr.get_data_loader( aug = True )
             #val_datamgr     = caltech256_few_shot.SimpleDataManager(224, batch_size = 64)
             #val_loader      = val_datamgr.get_data_loader( "val", aug = False)
                 
