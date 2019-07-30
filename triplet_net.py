@@ -30,6 +30,22 @@ from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_fe
 
 #from sklearn.neighbors import KNeighborsClassifier
 
+
+class Muti(nn.Module):
+    def __init__(self, embeddings_best_of_each):
+        super(Net, self).__init__()
+        
+
+
+        self.fc = nn.Linear(dim, 5)
+
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
+
+
 class Net(nn.Module):
     def __init__(self, dim):
         super(Net, self).__init__()
@@ -218,21 +234,19 @@ def train_loss(embeddings, y_a_i, support_size, n_support, total_epoch):
 
     return sum(all_losses) / (len(all_losses) + 0.0)
 
-def train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_size, n_support, with_replacement=True):
+def combine_model(model_embeddings, y_a_i, support_size, n_support, with_replacement=True):
 
-    embeddings_idx = []
+    embeddings_idx_model = []
     embeddings_all = None
 
-    embedding_num = len(imagenet_embeddings)
     min_loss = 100.0 
 
     cross_validation_epoch = 20
-
-    for num in range(embedding_num):
+    for num in range(len(model_embeddings)):
         embedding_candidate = None
         idx_candidate = -1
 
-        for idx, embedding in enumerate(imagenet_embeddings):
+        for idx, embedding in enumerate(model_embeddings):
 
             if embeddings_all is None:
                 running_loss = train_loss(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
@@ -247,21 +261,56 @@ def train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_siz
 
         if with_replacement:
             if idx_candidate != -1: 
-                embeddings_idx.append(idx_candidate)
+                embeddings_idx_model.append(idx_candidate)
                 if embeddings_all is None:
                     embeddings_all = embedding_candidate
                 else:
                     embeddings_all = torch.cat((embeddings_all, embedding_candidate), 1)
         else:
-            if idx_candidate not in embeddings_idx and idx_candidate != -1: 
-                embeddings_idx.append(idx_candidate)
+            if idx_candidate not in embeddings_idx_model and idx_candidate != -1: 
+                embeddings_idx_model.append(idx_candidate)
                 if embeddings_all is None:
                     embeddings_all = embedding_candidate
                 else:
                     embeddings_all = torch.cat((embeddings_all, embedding_candidate), 1)
 
-    print embeddings_idx
-    return embeddings_idx, embeddings_all
+    return embeddings_idx_model, embeddings_all
+
+
+
+def train_selection(imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings, y_a_i, support_size, n_support, with_replacement=False):
+    all_embeddings = [imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings]
+
+    embeddings_idx = []
+
+    cross_validation_epoch = 20
+
+    embeddings_best_of_each = []
+    embeddings_idx_of_each = []
+
+    for num in range(len(all_embeddings)):
+        embedding_candidate = None
+        idx_candidate = -1
+        min_loss = 100.0 
+
+        for idx, embedding in enumerate(all_embeddings[num]):
+
+            running_loss = train_loss(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
+            if running_loss < min_loss:
+                embedding_candidate = embedding
+                idx_candidate = idx
+                min_loss = running_loss
+
+        embeddings_idx_of_each.append(idx_candidate)
+        embeddings_best_of_each.append(embedding_candidate)
+
+
+    embeddings_idx_model, embeddings_all = combine_model(embeddings_best_of_each, y_a_i, support_size, n_support, with_replacement=with_replacement)
+   
+    print(embeddings_idx_model)
+
+    return embeddings_idx_of_each, embeddings_idx_model, embeddings_all, embeddings_best_of_each
+
 
 def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 15, n_way = 5, n_support = 5): #overwrite parrent function
     correct = 0
@@ -277,7 +326,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         imagenet_model = model_dict[params.model]()
         cifar100_model = model_dict[params.model]()
         cub_model = model_dict[params.model]()
-
+        caltech256_model = model_dict[params.model]()
+        dtd_model = model_dict[params.model]()
 
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "miniImageNet_to_CUB", params.model, params.method)
@@ -358,8 +408,58 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 state.pop(key)
 
         cub_model.load_state_dict(state)
-        ###############################################################################################
 
+        ###############################################################################################
+        checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "caltech256", params.model, params.method)
+        if params.train_aug:
+            checkpoint_dir += '_aug'
+
+        params.save_iter = -1
+        if params.save_iter != -1:
+            caltech_modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
+        elif params.method in ['baseline', 'baseline++'] :
+            caltech_modelfile   = get_resume_file(checkpoint_dir)
+        else:
+            caltech_modelfile   = get_best_file(checkpoint_dir)
+
+        tmp = torch.load(caltech_modelfile)
+        state = tmp['state']
+
+        state_keys = list(state.keys())
+        for _, key in enumerate(state_keys):
+            if "feature." in key:
+                newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
+                state[newkey] = state.pop(key)
+            else:
+                state.pop(key)
+
+        caltech256_model.load_state_dict(state)
+        ###############################################################################################
+        checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "DTD", params.model, params.method)
+        if params.train_aug:
+            checkpoint_dir += '_aug'
+
+        params.save_iter = -1
+        if params.save_iter != -1:
+            dtd_modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
+        elif params.method in ['baseline', 'baseline++'] :
+            dtd_modelfile   = get_resume_file(checkpoint_dir)
+        else:
+            dtd_modelfile   = get_best_file(checkpoint_dir)
+
+        tmp = torch.load(dtd_modelfile)
+        state = tmp['state']
+
+        state_keys = list(state.keys())
+        for _, key in enumerate(state_keys):
+            if "feature." in key:
+                newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
+                state[newkey] = state.pop(key)
+            else:
+                state.pop(key)
+
+        dtd_model.load_state_dict(state)
+        ###############################################################################################
 
         n_query = x.size(1) - n_support
         x = x.cuda()
@@ -370,19 +470,25 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         ###############################################################################################
         imagenet_model.cuda()
         cifar100_model.cuda()
+        cub_model.cuda()
+        caltech256_model.cuda()
+        dtd_model.cuda()
+
         imagenet_model.eval()
         cifar100_model.eval()
+        cub_model.eval()
+        caltech256_model.eval()
+        dtd_model.eval()
 
-
+        ###############################################################################################
         x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
         imagenet_embeddings = []
         for idx, module in enumerate(imagenet_model.trunk):
             x_a_i = module(x_a_i)
             if len(list(x_a_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
-                imagenet_embeddings.append(embedding)
+                imagenet_embeddings.append(embedding.detach())
         imagenet_embeddings = imagenet_embeddings[4:-1]
-
 
         x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
         cifar100_embeddings = []
@@ -390,18 +496,42 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             x_a_i = module(x_a_i)
             if len(list(x_a_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
-                cifar100_embeddings.append(embedding)
+                cifar100_embeddings.append(embedding.detach())
         cifar100_embeddings = cifar100_embeddings[4:-1]
+
+        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
+        cub_embeddings = []
+        for idx, module in enumerate(cub_model.trunk):
+            x_a_i = module(x_a_i)
+            if len(list(x_a_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
+                cub_embeddings.append(embedding.detach())
+        cub_embeddings = cub_embeddings[4:-1]
+    
+        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
+        caltech_embeddings = []
+        for idx, module in enumerate(caltech256_model.trunk):
+            x_a_i = module(x_a_i)
+            if len(list(x_a_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
+                caltech_embeddings.append(embedding.detach())
+        caltech_embeddings = caltech_embeddings[4:-1]
+
+        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
+        dtd_embeddings = []
+        for idx, module in enumerate(dtd_model.trunk):
+            x_a_i = module(x_a_i)
+            if len(list(x_a_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_a_i, (1, 1)).squeeze()
+                dtd_embeddings.append(embedding.detach())
+        dtd_embeddings = dtd_embeddings[4:-1]
 
         ##########################################################
         y_a_i = np.repeat(range( n_way ), n_support ) # (25,)
-
-
-
-        embeddings_idx, embeddings_train  =  train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_size, n_support, with_replacement=True)
+        embeddings_idx_of_each, embeddings_idx_model, embeddings_train, embeddings_best_of_each = train_selection(imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings, y_a_i, support_size, n_support, with_replacement=True)
+       
         #greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, False)
         ##########################################################
-
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
         imagenet_embeddings_test = []
         for idx, module in enumerate(imagenet_model.trunk):
@@ -409,10 +539,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
             if len(list(x_b_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
-                imagenet_embeddings_test.append(embedding)
-
+                imagenet_embeddings_test.append(embedding.detach())
         imagenet_embeddings_test = imagenet_embeddings_test[4:-1]
-        embeddings_test = []
 
 
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
@@ -422,13 +550,50 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
             if len(list(x_b_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
-                cifar100_embeddings_test.append(embedding)     
+                cifar100_embeddings_test.append(embedding.detach())     
         cifar100_embeddings_test = cifar100_embeddings_test[4:-1]
     
 
-        for index in embeddings_idx:
-            embeddings_test.append(imagenet_embeddings_test[index])
+        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
+        cub_embeddings_test = []
+        for idx, module in enumerate(cub_model.trunk):
+            x_b_i = module(x_b_i)
+
+            if len(list(x_b_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
+                cub_embeddings_test.append(embedding.detach())
+        cub_embeddings_test = cub_embeddings_test[4:-1]
+        
+
+        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
+        caltech_embeddings_test = []
+        for idx, module in enumerate(caltech256_model.trunk):
+            x_b_i = module(x_b_i)
+
+            if len(list(x_b_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
+                caltech_embeddings_test.append(embedding.detach())
+        caltech_embeddings_test = caltech_embeddings_test[4:-1]
+        
+
+        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
+        dtd_embeddings_test = []
+        for idx, module in enumerate(dtd_model.trunk):
+            x_b_i = module(x_b_i)
+            if len(list(x_b_i.size())) == 4:
+                embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
+                dtd_embeddings_test.append(embedding.detach())
+        dtd_embeddings_test = dtd_embeddings_test[4:-1]
+
+        ############################################################################################
+        all_embeddings_test = [imagenet_embeddings_test, cifar100_embeddings_test, dtd_embeddings_test, cub_embeddings_test, caltech_embeddings_test]
+        embeddings_test = []
+
+        for index in embeddings_idx_model:
+            embeddings_test.append(all_embeddings_test[index][embeddings_idx_of_each[index]])
+      
         embeddings_test = torch.cat(embeddings_test, 1)
+
 
         ############################################################################################
         net = Net(embeddings_train.size()[1]).cuda()
@@ -475,7 +640,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         
         ###############################################################################################
         
-
     acc_all  = np.asarray(acc_all)
     acc_mean = np.mean(acc_all)
     acc_std  = np.std(acc_all)
@@ -485,45 +649,31 @@ if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
 
-    if 'Conv' in params.model:
-        if params.dataset in ['omniglot', 'omniglot_to_emnist']:
-            image_size = 28
-        else:
-            image_size = 84
-    else:
-        image_size = 224
-
-
+    image_size = 224
     optimization = 'Adam'
-
     n_query = max(1, int(16* params.test_n_way/params.train_n_way)) #if test_n_way is smaller than train_n_way, reduce n_query to keep batch size small
+    iter_num = 600
+    few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
+   
+    dataset_names = ["ISIC", "EuroSAT", "CropDisease"]
+    novel_loaders = []
 
-    if params.method in ['baseline']:
-        iter_num = 600
-        few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
-        datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
-       
-        split = "novel"
+    datamgr             =  ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+    novel_loader        = datamgr.get_data_loader(aug =False)
+    novel_loaders.append(novel_loader)
 
-        if params.dataset == 'miniImageNet_to_CUB':
-            base_file = configs.data_dir['miniImagenet'] + 'all.json' 
-            novel_file   = configs.data_dir['CUB'] + split +'.json' 
-        elif params.dataset == 'CUB_to_miniImageNet':
-            base_file = configs.data_dir['CUB'] + 'base.json' 
-            novel_file   = configs.data_dir['miniImagenet'] + split +'.json' 
-        elif params.dataset == 'omniglot_to_emnist':
-            base_file = configs.data_dir['omniglot'] + 'noLatin.json' 
-            novel_file   = configs.data_dir['emnist'] + split +'.json' 
+    datamgr             =  EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+    novel_loader        = datamgr.get_data_loader(aug =False)
+    novel_loaders.append(novel_loader)
 
-        if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
-
-            datamgr             =  CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
-            novel_loader        = datamgr.get_data_loader(aug =False)
-
+    datamgr             =  CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
+    novel_loader        = datamgr.get_data_loader(aug =False)
+    novel_loaders.append(novel_loader)
     #########################################################################
 
-    start_epoch = params.start_epoch
-    stop_epoch = params.stop_epoch
+    for idx, novel_loader in enumerate(novel_loaders):
+        print dataset_names[idx]
+        start_epoch = params.start_epoch
+        stop_epoch = params.stop_epoch
 
-
-    test_loop(novel_loader, return_std = False,  n_query = 15, **few_shot_params)
+        test_loop(novel_loader, return_std = False,  n_query = 15, **few_shot_params)

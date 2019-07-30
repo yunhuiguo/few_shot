@@ -267,7 +267,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         dtd_embeddings = dtd_embeddings[4:-1]
 
-        embeddings_train = dtd_embeddings[-2]
+        embeddings_train = [dtd_embeddings[-1], imagenet_embeddings[-2]]
+        embeddings_train = torch.cat(embeddings_train, 1)
         ###############################################################################################
 
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
@@ -330,7 +331,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
       
         dtd_embeddings_test = dtd_embeddings_test[4:-1]
 
-        embeddings_test =  dtd_embeddings_test[-2]
+        embeddings_test = [dtd_embeddings_test[-1], imagenet_embeddings_test[-2]]
+        embeddings_test = torch.cat(embeddings_test, 1)
 
         ###############################################################################################
 
