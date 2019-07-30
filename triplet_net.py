@@ -303,7 +303,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
-        imagenet_model.load_state_dict(state)
+        #imagenet_model.load_state_dict(state)
         ###############################################################################################      
 
         ###############################################################################################      
@@ -331,7 +331,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
-        cifar100_model.load_state_dict(state)
+        #cifar100_model.load_state_dict(state)
 
         ###############################################################################################
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "CUB", params.model, params.method)
@@ -357,7 +357,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
-        cub_model.load_state_dict(state)
+        #cub_model.load_state_dict(state)
         ###############################################################################################
 
 
@@ -393,12 +393,14 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 cifar100_embeddings.append(embedding)
         cifar100_embeddings = cifar100_embeddings[4:-1]
 
+
+        embeddings_train = imagenet_embeddings[-1]
+
         ##########################################################
         y_a_i = np.repeat(range( n_way ), n_support ) # (25,)
 
 
-
-        embeddings_idx, embeddings_train  =  train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_size, n_support, with_replacement=True)
+        #embeddings_idx, embeddings_train  =  train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_size, n_support, with_replacement=True)
         #greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, False)
         ##########################################################
 
@@ -410,10 +412,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             if len(list(x_b_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
                 imagenet_embeddings_test.append(embedding)
-
         imagenet_embeddings_test = imagenet_embeddings_test[4:-1]
-        embeddings_test = []
-
 
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
         cifar100_embeddings_test = []
@@ -426,9 +425,13 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         cifar100_embeddings_test = cifar100_embeddings_test[4:-1]
     
 
+        '''
         for index in embeddings_idx:
             embeddings_test.append(imagenet_embeddings_test[index])
         embeddings_test = torch.cat(embeddings_test, 1)
+        '''
+        embeddings_test = imagenet_embeddings_test[-1]
+
 
         ############################################################################################
         net = Net(embeddings_train.size()[1]).cuda()
