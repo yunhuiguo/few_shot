@@ -4,7 +4,7 @@ import torch
 from PIL import Image
 import numpy as np
 import torchvision.transforms as transforms
-from . import additional_transforms as add_transforms
+import additional_transforms as add_transforms
 from abc import abstractmethod
 from torchvision.datasets import CIFAR100, CIFAR10
 
@@ -19,8 +19,8 @@ class SimpleDataset:
 
         self.meta['image_names'] = []
         self.meta['image_labels'] = []
+        if self.dataset == "CIFAR100":
 
-        if self.dataset is "CIFAR100":
             d = CIFAR100("./", train=True, download=True)
             for i, (data, label) in enumerate(d):
                 if mode == "base":
@@ -36,9 +36,8 @@ class SimpleDataset:
                         self.meta['image_names'].append(data)
                         self.meta['image_labels'].append(label)  
 
-        elif self.dataset is "CIFAR10":
+        elif self.dataset == "CIFAR10":
             d = CIFAR10("./", train=True, download=True)
-
             for i, (data, label) in enumerate(d):
                 if mode == "novel":
                     self.meta['image_names'].append(data)
@@ -80,7 +79,6 @@ class SetDataset:
 
 
         for i, (data, label) in enumerate(d):
-            print (label)
             if label % 3 == type_:
                 self.sub_meta[label].append(data)
     
@@ -205,7 +203,7 @@ class SetDataManager(DataManager):
         return data_loader
 
 if __name__ == '__main__':
-
+    '''
     train_few_shot_params   = dict(n_way = 5, n_support = 5) 
     base_datamgr            = SetDataManager('novel', "CIFAR100", 224, n_query = 16)
     base_loader             = base_datamgr.get_data_loader(aug = True)
@@ -218,17 +216,16 @@ if __name__ == '__main__':
             break
 
     '''
-    base_datamgr  = SimpleDataManager(224, "CIFAR100", batch_size = 16)
+    base_datamgr  = SimpleDataManager("CIFAR100", 224, batch_size = 16)
 
-    base_loader, classes     = base_datamgr.get_data_loader( "base" , aug = True )
-    print classes
+    base_loader = base_datamgr.get_data_loader( "base" , aug = True )
     cnt = 10
     for i, (data, label) in enumerate(base_loader):
         if i < cnt:
             print data.size()
         else:
             break
-
+    '''
     val_datamgr     = SimpleDataManager(224, batch_size = 64)
     val_loader, classes      = val_datamgr.get_data_loader( "val", aug = False)
     print classes

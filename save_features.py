@@ -98,8 +98,9 @@ if __name__ == '__main__':
         #datamgr         = SimpleDataManager(image_size, batch_size = 64)
         #data_loader     = datamgr.get_data_loader(loadfile, aug = False)
 
-        datamgr         = ISIC_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        datamgr         = CropDisease_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader(aug = False )
+
 
     elif params.dataset == "cifar100_to_caltech256":
         datamgr         = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
