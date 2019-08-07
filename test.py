@@ -132,23 +132,8 @@ if __name__ == '__main__':
 
         if params.dataset not in ["cifar100_to_caltech256", "caltech256_to_cifar100"]:
 
-            datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
+            datamgr             = CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
             
-            '''
-            if params.dataset == 'miniImageNet_to_CUB':
-                loadfile   = configs.data_dir['CUB'] + split +'.json'
-            elif params.dataset == "CUB_to_miniImageNet":
-                loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
-            elif params.dataset == 'omniglot_to_emnist':
-                loadfile  = configs.data_dir['emnist'] + split +'.json' 
-            else: 
-                loadfile    = configs.data_dir[params.dataset] + split + '.json'
-            '''
-            #novel_loader     = datamgr.get_data_loader(loadfile, aug = False)
-
-            datamgr             = ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
-            
-            print("ok")
             novel_loader        = datamgr.get_data_loader(aug =False)
           
 
@@ -168,7 +153,9 @@ if __name__ == '__main__':
         acc_mean, acc_std = model.test_loop( novel_loader, return_std = True)
 
     else:
-        novel_file = os.path.join( checkpoint_dir.replace("checkpoints","features"), split_str +".hdf5") #defaut split = novel, but you can also test base or val classes
+
+        params.save_iter = 399
+        novel_file = os.path.join( checkpoint_dir.replace("checkpoints","features"), split_str + "_" + str(params.save_iter)+".hdf5") #defaut split = novel, but you can also test base or val classes
         cl_data_file = feat_loader.init_loader(novel_file)
 
         for i in range(iter_num):
@@ -181,6 +168,7 @@ if __name__ == '__main__':
         acc_mean = np.mean(acc_all)
         acc_std  = np.std(acc_all)
         print('%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num)))
+
 
     with open('./record/results.txt' , 'a') as f:
         timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime()) 

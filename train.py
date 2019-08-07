@@ -24,7 +24,7 @@ from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_fe
 
 #from utils import load_pretrained_model
 
-def train(base_loader, model, optimization, start_epoch, stop_epoch, params):    
+def train(base_loader ,model, optimization, start_epoch, stop_epoch, params):    
     if optimization == 'Adam':
         optimizer = torch.optim.Adam(model.parameters())
     else:
@@ -61,7 +61,7 @@ if __name__=='__main__':
 
     if params.dataset not in ['DTD', 'caltech256_to_cifar100']:
 
-        if params.dataset == 'miniImageNet_to_ISIC':
+        if params.dataset == 'miniImageNet':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
             val_file   = configs.data_dir['CUB'] + 'val.json' 
 

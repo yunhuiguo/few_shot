@@ -1,0 +1,19 @@
+/usr/local/lib/python2.7/dist-packages/torchvision/transforms/transforms.py:563: UserWarning: The use of the transforms.RandomSizedCrop transform is deprecated, please use transforms.RandomResizedCrop instead.
+  "please use transforms.RandomResizedCrop instead.")
+/usr/local/lib/python2.7/dist-packages/torchvision/transforms/transforms.py:188: UserWarning: The use of the transforms.Scale transform is deprecated, please use transforms.Resize instead.
+  "please use transforms.Resize instead.")
+THCudaCheck FAIL file=/pytorch/aten/src/THC/generic/THCStorage.cu line=58 error=2 : out of memory
+Traceback (most recent call last):
+  File "./train.py", line 210, in <module>
+    model = train(base_loader, model, optimization, start_epoch, stop_epoch, params)
+  File "./train.py", line 38, in train
+    model.train_loop(epoch, base_loader,  optimizer ) #model are called by reference, no need to return 
+  File "/home/yunhui/ibm2019/few_shot/methods/maml.py", line 85, in train_loop
+    loss = self.set_forward_loss(x)
+  File "/home/yunhui/ibm2019/few_shot/methods/maml.py", line 66, in set_forward_loss
+    scores = self.set_forward(x, is_feature = False)
+  File "/home/yunhui/ibm2019/few_shot/methods/maml.py", line 47, in set_forward
+    grad = torch.autograd.grad(set_loss, fast_parameters, create_graph=True)
+  File "/usr/local/lib/python2.7/dist-packages/torch/autograd/__init__.py", line 144, in grad
+    inputs, allow_unused)
+RuntimeError: cuda runtime error (2) : out of memory at /pytorch/aten/src/THC/generic/THCStorage.cu:58
