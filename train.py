@@ -63,7 +63,7 @@ if __name__=='__main__':
 
         if params.dataset == 'miniImageNet':
             base_file = configs.data_dir['miniImagenet'] + 'all.json' 
-            val_file   = configs.data_dir['CUB'] + 'val.json' 
+            #val_file   = configs.data_dir['CUB'] + 'val.json' 
 
         elif params.dataset == 'CUB':
             base_file = configs.data_dir['CUB'] + 'base.json' 
@@ -89,33 +89,37 @@ if __name__=='__main__':
     optimization = 'Adam'
     if params.method in ['baseline', 'baseline++'] :
 
-        if params.dataset not in ["DTD", "cifar100"]:
+        if params.dataset not in ["DTD", "cifar100", "caltech256"]:
 
             base_datamgr    = SimpleDataManager(image_size, batch_size = 16)
             base_loader     = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
             
-            val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
+            #val_datamgr     = SimpleDataManager(image_size, batch_size = 64)
+            #val_loader      = val_datamgr.get_data_loader( val_file, aug = False)
         
-        elif params.dataset == "DTD":
-            base_datamgr    = DTD_few_shot.SimpleDataManager(224, batch_size = 16)
-            base_loader    = base_datamgr.get_data_loader( aug = True )
-            #val_datamgr     = caltech256_few_shot.SimpleDataManager(224, batch_size = 64)
-            #val_loader      = val_datamgr.get_data_loader( "val", aug = False)
+        elif params.dataset == "cifar100":
+            base_datamgr    = cifar_few_shot.SimpleDataManager("CIFAR100", image_size, batch_size = 16)
+            base_loader    = base_datamgr.get_data_loader( "base" , aug = True )
                 
-            params.num_classes = 256
+            params.num_classes = 100
 
-        elif params.dataset == "caltech256_to_cifar100":
-            base_datamgr    = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 16)
-            base_loader     = base_datamgr.get_data_loader( "base" , aug = True )
+        elif params.dataset == 'caltech256':
+            base_datamgr  = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_loader = base_datamgr.get_data_loader(aug = False )
+            params.num_classes = 257
 
-            val_datamgr     = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
-            val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
+        elif params.dataset == "DTD":
+            base_datamgr    = DTD_few_shot.SimpleDataManager(image_size, batch_size = 16)
+            base_loader     = base_datamgr.get_data_loader( aug = True )
+
+            
+            #val_datamgr     = cifar_few_shot.SimpleDataManager(image_size, batch_size = 64)
+            #val_loader      = val_datamgr.get_data_loader( 'val', aug = False)
 
 
-        if params.dataset == 'caltech256_to_cifar100':
-            params.num_classes = 256
-            assert params.num_classes >= 256, 'class number need to be larger than max label id in base class'
+        if params.dataset == 'caltech256':
+            params.num_classes = 257
+            assert params.num_classes >= 257, 'class number need to be larger than max label id in base class'
 
         if params.dataset == 'omniglot':
             assert params.num_classes >= 4112, 'class number need to be larger than max label id in base class'

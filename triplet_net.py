@@ -31,94 +31,19 @@ from datasets import svhn_few_shot, cifar_few_shot, caltech256_few_shot, ISIC_fe
 #from sklearn.neighbors import KNeighborsClassifier
 
 
-class Muti(nn.Module):
-    def __init__(self, embeddings_best_of_each):
-        super(Net, self).__init__()
-        
-
-
-        self.fc = nn.Linear(dim, 5)
-
-
-    def forward(self, x):
-        x = self.fc(x)
-        return x
-
-
-
 class Net(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, model_func, n_way):
         super(Net, self).__init__()
-        self.fc = nn.Linear(dim, 5)
+
+        self.feature= model_func
+        self.feat_dim   = self.feature.final_feat_dim
+        
+        self.fc = nn.Linear(self.feat_dim, n_way)
 
     def forward(self, x):
+        x = self.feature(x)
         x = self.fc(x)
         return x
-
-class TripletSelector(object):
-    """
-    Implementation should return indices of anchors, positive and negative samples
-    return np array of shape [N_triplets x 3]
-    """
-
-    def __init__(self):
-        pass
-
-    def get_triplets(self, embeddings, labels):
-        raise NotImplementedError
-
-
-class AllTripletSelector(TripletSelector):
-    """
-    Returns all possible triplets
-    May be impractical in most cases
-    """
-
-    def __init__(self):
-        super(AllTripletSelector, self).__init__()
-
-    def get_triplets(self, embeddings, labels):
-        triplets = []
-        for label in set(labels):
-            label_mask = (labels == label)
-            label_indices = np.where(label_mask)[0]
-            if len(label_indices) < 2:
-                continue
-            negative_indices = np.where(np.logical_not(label_mask))[0]
-            anchor_positives = list(combinations(label_indices, 2))  # All anchor-positive pairs
-
-            # Add all negatives for all positive pairs
-            temp_triplets = [[anchor_positive[0], anchor_positive[1], neg_ind] for anchor_positive in anchor_positives
-                             for neg_ind in negative_indices]
-            triplets += temp_triplets
-
-        return torch.LongTensor(np.array(triplets))
-
-class OnlineTripletLoss(nn.Module):
-    """
-    Online Triplets loss
-    Takes a batch of embeddings and corresponding labels.
-    Triplets are generated using triplet_selector object that take embeddings and targets and return indices of
-    triplets
-    """
-
-    def __init__(self, margin, triplet_selector):
-        super(OnlineTripletLoss, self).__init__()
-        self.margin = margin
-        self.triplet_selector = triplet_selector
-
-    def forward(self, embeddings, target):
-
-        triplets = self.triplet_selector.get_triplets(embeddings, target)
-
-        if embeddings.is_cuda:
-            triplets = triplets.cuda()
-
-        ap_distances = (embeddings[triplets[:, 0]] - embeddings[triplets[:, 1]]).pow(2).sum(1)  # .pow(.5)
-        an_distances = (embeddings[triplets[:, 0]] - embeddings[triplets[:, 2]]).pow(2).sum(1)  # .pow(.5)
-
-        losses = F.relu(ap_distances - an_distances + self.margin)
-        return losses.mean()
 
 def greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, with_replacement=False):
         
@@ -173,7 +98,7 @@ def greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, 
     print embeddings_idx
 
 
-def train_loss(embeddings, y_a_i, support_size, n_support, total_epoch):
+def train_loss_cross_validation(embeddings, y_a_i, support_size, n_support, total_epoch):
 
     embeddings = Variable(embeddings).cuda()
     all_losses = []
@@ -234,6 +159,70 @@ def train_loss(embeddings, y_a_i, support_size, n_support, total_epoch):
 
     return sum(all_losses) / (len(all_losses) + 0.0)
 
+
+
+def train_loss_half_validation(embeddings, y_a_i, support_size, n_support, total_epoch):
+    embeddings = embeddings.cpu().numpy()
+
+    train_embeddings = []
+    val_embeddings = []
+    train_y = []
+    val_y = []
+
+    for idx in range(support_size):
+        if (idx % 10) % 2 == 0:
+            val_embeddings.append(embeddings[idx, :].reshape(1, embeddings[idx, :].shape[0]))
+            val_y.append(y_a_i[idx])
+        else:
+            train_embeddings.append(embeddings[idx, :].reshape(1, embeddings[idx, :].shape[0]))
+            train_y.append(y_a_i[idx])
+
+    train_y = np.asarray(train_y)
+    val_y = np.asarray(val_y)
+
+
+    val_embeddings = torch.from_numpy(np.concatenate( val_embeddings, axis=0 ))
+    train_embeddings = torch.from_numpy(np.concatenate( train_embeddings, axis=0 ))
+
+
+    loss_fn = nn.CrossEntropyLoss().cuda()
+    net = Net(train_embeddings.size()[1]).cuda()
+    classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+   
+    train_y = Variable(torch.from_numpy(train_y)).cuda() # (25,)
+    train_embeddings = Variable(train_embeddings).cuda()
+
+
+    train_size = support_size / 2
+    batch_size = 4
+    for epoch in range(total_epoch):
+        rand_id = np.random.permutation(train_size)
+
+        for j in range(0, train_size, batch_size):
+            classifier_opt.zero_grad()
+
+            #####################################
+            selected_id = torch.from_numpy( rand_id[j: min(j+batch_size, train_size)]).cuda()
+            z_batch = train_embeddings[selected_id]
+
+            y_batch = train_y[selected_id] 
+            #####################################
+            outputs = net(z_batch)            
+            #####################################
+    
+            loss = loss_fn(outputs, y_batch)
+            loss.backward()
+            classifier_opt.step()
+
+    val_embeddings = Variable(val_embeddings).cuda()
+    val_y = Variable(torch.from_numpy(val_y)).cuda() # (25,)
+
+    outputs = net(val_embeddings)   
+    loss = loss_fn(outputs, val_y)
+
+    return loss
+
+
 def combine_model(model_embeddings, y_a_i, support_size, n_support, with_replacement=True):
 
     embeddings_idx_model = []
@@ -249,10 +238,10 @@ def combine_model(model_embeddings, y_a_i, support_size, n_support, with_replace
         for idx, embedding in enumerate(model_embeddings):
 
             if embeddings_all is None:
-                running_loss = train_loss(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
+                running_loss = train_loss_half_validation(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
             else:
                 tmp_embedding = torch.cat((embeddings_all, embedding), 1)
-                running_loss = train_loss(tmp_embedding, y_a_i, support_size, n_support, cross_validation_epoch)
+                running_loss = train_loss_half_validation(tmp_embedding, y_a_i, support_size, n_support, cross_validation_epoch)
 
             if running_loss < min_loss:
                 embedding_candidate = embedding
@@ -292,15 +281,13 @@ def train_selection(imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cu
         embedding_candidate = None
         idx_candidate = -1
         min_loss = 100.0 
-
         for idx, embedding in enumerate(all_embeddings[num]):
 
-            running_loss = train_loss(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
+            running_loss = train_loss_half_validation(embedding, y_a_i, support_size, n_support, cross_validation_epoch)
             if running_loss < min_loss:
                 embedding_candidate = embedding
                 idx_candidate = idx
                 min_loss = running_loss
-
         embeddings_idx_of_each.append(idx_candidate)
         embeddings_best_of_each.append(embedding_candidate)
 
@@ -330,7 +317,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         dtd_model = model_dict[params.model]()
 
         ###############################################################################################      
-        checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "miniImageNet_to_CUB", params.model, params.method)
+        checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "miniImageNet", params.model, params.method)
         if params.train_aug:
             checkpoint_dir += '_aug'
 
@@ -353,7 +340,13 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
+<<<<<<< HEAD
         #imagenet_model.load_state_dict(state)
+=======
+        imagenet_model.load_state_dict(state)
+
+        '''
+>>>>>>> 06032ec283e2a021b366830bb8921636ac04df33
         ###############################################################################################      
 
         ###############################################################################################      
@@ -462,13 +455,15 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         dtd_model.load_state_dict(state)
         ###############################################################################################
-
+        '''
         n_query = x.size(1) - n_support
         x = x.cuda()
         x_var = Variable(x)
 
         batch_size = 4
         support_size = n_way * n_support # 25
+       
+        '''
         ###############################################################################################
         imagenet_model.cuda()
         cifar100_model.cuda()
@@ -616,15 +611,24 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
 
         ############################################################################################
-        net = Net(embeddings_train.size()[1]).cuda()
-        loss_fn = nn.CrossEntropyLoss().cuda()
-        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
-        total_epoch = 100
+        '''
 
-        embeddings_train = Variable(embeddings_train.cuda())
+        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
+        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
+
         y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
 
 
+        net = Net(imagenet_model, n_way).cuda()
+        loss_fn = nn.CrossEntropyLoss().cuda()
+     
+        classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
+
+        total_epoch = 100
+        #embeddings_train = Variable(embeddings_train.cuda())
+
+
+        net.train()
         for epoch in range(total_epoch):
             rand_id = np.random.permutation(support_size)
 
@@ -633,7 +637,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
                 #####################################
                 selected_id = torch.from_numpy( rand_id[j: min(j+batch_size, support_size)]).cuda()
-                z_batch = embeddings_train[selected_id]
+                #z_batch = embeddings_train[selected_id]
+                z_batch = x_a_i[selected_id]
 
                 y_batch = y_a_i[selected_id] 
                 #####################################
@@ -646,8 +651,10 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 classifier_opt.step()
 
 
-        embeddings_test = Variable(embeddings_test.cuda())
-        scores = net(embeddings_test)
+        #embeddings_test = Variable(embeddings_test.cuda())
+        #scores = net(embeddings_test)
+
+        scores = net(x_b_i)
 
         y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
@@ -657,7 +664,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         correct_this, count_this = float(top1_correct), len(y_query)
         print (correct_this/ count_this *100)
         acc_all.append((correct_this/ count_this *100))
-        
+
         ###############################################################################################
         
     acc_all  = np.asarray(acc_all)
@@ -677,18 +684,21 @@ if __name__=='__main__':
    
     dataset_names = ["ISIC", "EuroSAT", "CropDisease"]
     novel_loaders = []
-
+    
     datamgr             =  ISIC_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
+
 
     datamgr             =  EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
 
+
     datamgr             =  CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
+    
     #########################################################################
 
     for idx, novel_loader in enumerate(novel_loaders):

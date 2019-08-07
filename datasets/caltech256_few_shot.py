@@ -49,6 +49,8 @@ class Caltech256(data.Dataset):
     self.labels = []
 
     for cat in range(0, 257):
+      print (cat)
+
       cat_dirs = glob.glob(os.path.join(self.root, self.base_folder, '%03d*' % cat))
 
       for fdir in cat_dirs:
@@ -113,63 +115,41 @@ class Caltech256(data.Dataset):
 
 identity = lambda x:x
 class SimpleDataset:
-    def __init__(self, mode, transform, target_transform=identity):
+    def __init__(self, transform, target_transform=identity):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.meta = {}
 
-        self.meta['image_names'] = []
-        self.meta['image_labels'] = []
-
-        d = Caltech256(root='./', download=True)
-        for i, (data, label) in enumerate(d):
-            if mode == "base":
-                if label % 3 == 0:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)
-            elif mode == "val":
-                if label % 3 == 1:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)           
-            elif mode == "novel":
-                if label % 3 == 2:
-                    self.meta['image_names'].append(data)
-                    self.meta['image_labels'].append(label)      
-
+        self.d = Caltech256(root='./', transform=transform, target_transform=target_transform, download=True)
+        #for i, (data, label) in enumerate(d):
+        #    self.meta['image_names'].append(data)
+        #    self.meta['image_labels'].append(label)      
 
     def __getitem__(self, i):
 
-        img = self.transform(self.meta['image_names'][i])
-        target = self.target_transform(self.meta['image_labels'][i])
+        #img = self.transform(self.meta['image_names'][i])
+        #target = self.target_transform(self.meta['image_labels'][i])
+        img, target = self.d[i]
 
         return img, target
 
     def __len__(self):
-        return len(self.meta['image_names'])
+        #return len(self.meta['image_names'])
+        return len(self.d)
 
 
 class SetDataset:
-    def __init__(self, mode, batch_size, transform):
+    def __init__(self, batch_size, transform):
 
         self.sub_meta = {}
         self.cl_list = range(257)
 
-        if mode == "base":
-            type_ = 0
-        elif mode == "val":
-            type_ = 1
-        else:
-            type_ = 2
-
         for cl in self.cl_list:
-            if cl % 3 == type_:
-                self.sub_meta[cl] = []
+            self.sub_meta[cl] = []
 
         d = Caltech256(root='./', download=False)
         for i, (data, label) in enumerate(d):
-            if label % 3 == type_:
-                self.sub_meta[label].append(data)
+            self.sub_meta[label].append(data)
     
         self.sub_dataloader = [] 
         sub_data_loader_params = dict(batch_size = batch_size,
@@ -177,9 +157,8 @@ class SetDataset:
                                   num_workers = 0, #use main thread only or may receive multiple batches
                                   pin_memory = False)        
         for cl in self.cl_list:
-            if cl % 3 == type_:
-                sub_dataset = SubDataset(self.sub_meta[cl], cl, transform = transform )
-                self.sub_dataloader.append( torch.utils.data.DataLoader(sub_dataset, **sub_data_loader_params) )
+            sub_dataset = SubDataset(self.sub_meta[cl], cl, transform = transform )
+            self.sub_dataloader.append( torch.utils.data.DataLoader(sub_dataset, **sub_data_loader_params) )
 
     def __getitem__(self,i):
         return next(iter(self.sub_dataloader[i]))
@@ -261,9 +240,9 @@ class SimpleDataManager(DataManager):
         self.batch_size = batch_size
         self.trans_loader = TransformLoader(image_size)
 
-    def get_data_loader(self, mode, aug): #parameters that would change on train/val set
+    def get_data_loader(self, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
-        dataset = SimpleDataset(mode, transform)
+        dataset = SimpleDataset(transform)
 
         data_loader_params = dict(batch_size = self.batch_size, shuffle = True, num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
@@ -271,19 +250,18 @@ class SimpleDataManager(DataManager):
         return data_loader
 
 class SetDataManager(DataManager):
-    def __init__(self, mode, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
+    def __init__(self, image_size, n_way=5, n_support=5, n_query=16, n_eposide = 100):        
         super(SetDataManager, self).__init__()
         self.image_size = image_size
         self.n_way = n_way
         self.batch_size = n_support + n_query
         self.n_eposide = n_eposide
-        self.mode = mode
 
         self.trans_loader = TransformLoader(image_size)
 
     def get_data_loader(self, aug): #parameters that would change on train/val set
         transform = self.trans_loader.get_composed_transform(aug)
-        dataset = SetDataset(self.mode, self.batch_size, transform)
+        dataset = SetDataset(self.batch_size, transform)
         sampler = EpisodicBatchSampler(len(dataset), self.n_way, self.n_eposide )  
         data_loader_params = dict(batch_sampler = sampler,  num_workers = 12, pin_memory = True)       
         data_loader = torch.utils.data.DataLoader(dataset, **data_loader_params)
