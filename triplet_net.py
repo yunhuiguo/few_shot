@@ -45,6 +45,18 @@ class Net(nn.Module):
         x = self.fc(x)
         return x
 
+
+class Classifier(nn.Module):
+    def __init__(self, dim, n_way):
+        super(Classifier, self).__init__()
+        
+        self.fc = nn.Linear(dim, n_way)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
+
 def greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, with_replacement=False):
         
     margin = 1.0
@@ -342,9 +354,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         imagenet_model.load_state_dict(state)
 
-        '''
-        ###############################################################################################      
-
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "cifar100", params.model, params.method)
         if params.train_aug:
@@ -449,7 +458,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         dtd_model.load_state_dict(state)
         ###############################################################################################
-        '''
+    
         n_query = x.size(1) - n_support
         x = x.cuda()
         x_var = Variable(x)
@@ -457,7 +466,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         batch_size = 4
         support_size = n_way * n_support # 25
        
-        '''
+        
         ###############################################################################################
         imagenet_model.cuda()
         cifar100_model.cuda()
@@ -517,9 +526,20 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 dtd_embeddings.append(embedding.detach())
         dtd_embeddings = dtd_embeddings[4:-1]
 
+
+
+        all_embeddings_train = [imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings]
+
+        embeddings_train = []
+        for index in range(len(all_embeddings_train)):
+            embeddings_train.append(all_embeddings_train[index][-1])
+      
+        embeddings_train = torch.cat(embeddings_train, 1)
+
+
         ##########################################################
-        y_a_i = np.repeat(range( n_way ), n_support ) # (25,)
-        embeddings_idx_of_each, embeddings_idx_model, embeddings_train, embeddings_best_of_each = train_selection(imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings, y_a_i, support_size, n_support, with_replacement=True)
+        #y_a_i = np.repeat(range( n_way ), n_support ) # (25,)
+        #embeddings_idx_of_each, embeddings_idx_model, embeddings_train, embeddings_best_of_each = train_selection(imagenet_embeddings, cifar100_embeddings, dtd_embeddings, cub_embeddings, caltech_embeddings, y_a_i, support_size, n_support, with_replacement=True)
        
         #greedy_embedding_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, False)
         ##########################################################
@@ -580,28 +600,29 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         all_embeddings_test = [imagenet_embeddings_test, cifar100_embeddings_test, dtd_embeddings_test, cub_embeddings_test, caltech_embeddings_test]
         embeddings_test = []
 
-        for index in embeddings_idx_model:
-            embeddings_test.append(all_embeddings_test[index][embeddings_idx_of_each[index]])
+        #for index in embeddings_idx_model:
+            #embeddings_test.append(all_embeddings_test[index][embeddings_idx_of_each[index]])
+        for index in range(len(all_embeddings_test)):
+            embeddings_test.append(all_embeddings_test[index][-1])
       
         embeddings_test = torch.cat(embeddings_test, 1)
 
-
         ############################################################################################
-        '''
 
-        x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
-        x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
+        #x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
+        #x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
 
         y_a_i = Variable( torch.from_numpy( np.repeat(range( n_way ), n_support ) )).cuda() # (25,)
 
+        #net = Net(imagenet_model, n_way).cuda()
+        net = Classifier(embeddings_test.size()[1], n_way).cuda()
 
-        net = Net(imagenet_model, n_way).cuda()
         loss_fn = nn.CrossEntropyLoss().cuda()
      
         classifier_opt = torch.optim.SGD(net.parameters(), lr = 0.01, momentum=0.9, dampening=0.9, weight_decay=0.001)
 
         total_epoch = 100
-        #embeddings_train = Variable(embeddings_train.cuda())
+        embeddings_train = Variable(embeddings_train.cuda())
 
 
         net.train()
@@ -613,8 +634,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
                 #####################################
                 selected_id = torch.from_numpy( rand_id[j: min(j+batch_size, support_size)]).cuda()
-                #z_batch = embeddings_train[selected_id]
-                z_batch = x_a_i[selected_id]
+                z_batch = embeddings_train[selected_id]
+                #z_batch = x_a_i[selected_id]
 
                 y_batch = y_a_i[selected_id] 
                 #####################################
@@ -627,10 +648,10 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 classifier_opt.step()
 
 
-        #embeddings_test = Variable(embeddings_test.cuda())
-        #scores = net(embeddings_test)
+        embeddings_test = Variable(embeddings_test.cuda())
+        scores = net(embeddings_test)
 
-        scores = net(x_b_i)
+        #scores = net(x_b_i)
 
         y_query = np.repeat(range( n_way ), n_query )
         topk_scores, topk_labels = scores.data.topk(1, 1, True, True)
@@ -665,7 +686,6 @@ if __name__=='__main__':
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
 
-
     datamgr             =  EuroSAT_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
@@ -674,7 +694,7 @@ if __name__=='__main__':
     datamgr             =  CropDisease_few_shot.SetDataManager(image_size, n_eposide = iter_num, n_query = 15, **few_shot_params)
     novel_loader        = datamgr.get_data_loader(aug =False)
     novel_loaders.append(novel_loader)
-    
+
     #########################################################################
 
     for idx, novel_loader in enumerate(novel_loaders):
