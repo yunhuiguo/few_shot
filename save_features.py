@@ -68,17 +68,19 @@ if __name__ == '__main__':
         loadfile   = configs.data_dir['miniImagenet'] + split +'.json' 
     elif params.dataset == "miniImageNet_to_CUB":
         loadfile   = configs.data_dir['CUB'] + split +'.json' 
-
-
     elif params.dataset == "omniglot_to_emnist":
         loadfile  = configs.data_dir['emnist'] + split +'.json' 
 
     checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)
+    
+
     if params.train_aug:
         checkpoint_dir += '_aug'
 
     if not params.method in ['baseline', 'baseline++'] :
         checkpoint_dir += '_%dway_%dshot' %( params.train_n_way, params.n_shot)
+
+    params.save_iter = 399
 
     if params.save_iter != -1:
         modelfile   = get_assigned_file(checkpoint_dir, params.save_iter)
@@ -87,17 +89,24 @@ if __name__ == '__main__':
     else:
         modelfile   = get_best_file(checkpoint_dir)
 
+
     if params.save_iter != -1:
         outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + "_" + str(params.save_iter)+ ".hdf5") 
     else:
         outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + ".hdf5") 
 
 
-    if params.dataset not in ["cifar100_to_cifar10", "caltech256_to_cifar100"]:
+    if params.dataset in ["miniImageNet"]:
 
-        #datamgr         = SimpleDataManager(image_size, batch_size = 64)
-        #data_loader     = datamgr.get_data_loader(loadfile, aug = False)
+        datamgr         = CropDisease_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader(aug = False )
 
+    elif params.dataset in ["EuroSAT"]:
+
+        datamgr         = EuroSAT_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader(aug = False )
+
+    elif params.dataset in ["CropDisease"]:
         datamgr         = CropDisease_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader(aug = False )
 
@@ -106,9 +115,8 @@ if __name__ == '__main__':
         datamgr         = caltech256_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader( "novel" , aug = False )
 
-    elif params.dataset == "cifar100_to_cifar10":
-        datamgr         = cifar_few_shot.SimpleDataManager("CIFAR10", 224, batch_size = 64)
-        data_loader     = datamgr.get_data_loader( "novel" , aug = False )   
+        datamgr         = CropDisease_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        data_loader     = datamgr.get_data_loader(aug = False )
 
 
     if params.method in ['relationnet', 'relationnet_softmax']:
@@ -128,17 +136,6 @@ if __name__ == '__main__':
     
 
     model = model.cuda()
-    '''
-    branch = 1
-    num_classes = 5
-    resume = "/home/ibm2019/branchnet/checkpoints/train_from_scratch_flowers/model_best.pth.tar"
-    #model = load_pretrained_model.load_multi_branch_pretrained_model(resume, 50, num_classes, False)
-    model = load_pretrained_model.load_trained_model(50, num_classes, False, resume=resume)
-
-    model = model.cuda()
-
-    print(model)
-    '''
 
     tmp = torch.load(modelfile)
     state = tmp['state']

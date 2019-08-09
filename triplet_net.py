@@ -327,7 +327,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         cub_model = model_dict[params.model]()
         caltech256_model = model_dict[params.model]()
         dtd_model = model_dict[params.model]()
-
+        
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "miniImageNet", params.model, params.method)
         if params.train_aug:
@@ -354,6 +354,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         imagenet_model.load_state_dict(state)
 
+        '''
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "cifar100", params.model, params.method)
         if params.train_aug:
@@ -379,7 +380,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
-        cifar100_model.load_state_dict(state)
+        #cifar100_model.load_state_dict(state)
 
         ###############################################################################################
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "CUB", params.model, params.method)
@@ -405,6 +406,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
+        #cub_model.load_state_dict(state)
         cub_model.load_state_dict(state)
 
         ###############################################################################################
@@ -499,6 +501,14 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 cifar100_embeddings.append(embedding.detach())
         cifar100_embeddings = cifar100_embeddings[4:-1]
 
+
+        embeddings_train = imagenet_embeddings[-1]
+
+        ##########################################################
+        y_a_i = np.repeat(range( n_way ), n_support ) # (25,)
+
+
+        #embeddings_idx, embeddings_train  =  train_selection(imagenet_embeddings, cifar100_embeddings, y_a_i, support_size, n_support, with_replacement=True)
         x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
         cub_embeddings = []
         for idx, module in enumerate(cub_model.trunk):
@@ -550,6 +560,8 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
             if len(list(x_b_i.size())) == 4:
                 embedding =  F.adaptive_avg_pool2d(x_b_i, (1, 1)).squeeze()
+                imagenet_embeddings_test.append(embedding)
+        imagenet_embeddings_test = imagenet_embeddings_test[4:-1]
                 imagenet_embeddings_test.append(embedding.detach())
         imagenet_embeddings_test = imagenet_embeddings_test[4:-1]
 
@@ -564,6 +576,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 cifar100_embeddings_test.append(embedding.detach())     
         cifar100_embeddings_test = cifar100_embeddings_test[4:-1]
     
+
+        for index in embeddings_idx:
+            embeddings_test.append(imagenet_embeddings_test[index])
 
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
         cub_embeddings_test = []
@@ -606,7 +621,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             embeddings_test.append(all_embeddings_test[index][-1])
       
         embeddings_test = torch.cat(embeddings_test, 1)
-
+    
+        embeddings_test = imagenet_embeddings_test[-1]
+        
         ############################################################################################
 
         #x_a_i = x_var[:,:n_support,:,:,:].contiguous().view( n_way* n_support, *x.size()[2:]) # (25, 3, 224, 224)
@@ -623,7 +640,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         total_epoch = 100
         embeddings_train = Variable(embeddings_train.cuda())
-
 
         net.train()
         for epoch in range(total_epoch):
@@ -663,7 +679,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         acc_all.append((correct_this/ count_this *100))
 
         ###############################################################################################
-        
+        '''
     acc_all  = np.asarray(acc_all)
     acc_mean = np.mean(acc_all)
     acc_std  = np.std(acc_all)
