@@ -98,7 +98,7 @@ if __name__ == '__main__':
 
     if params.dataset in ["miniImageNet"]:
 
-        datamgr         = EuroSAT_few_shot.SimpleDataManager(image_size, batch_size = 64)
+        datamgr         = CropDisease_few_shot.SimpleDataManager(image_size, batch_size = 64)
         data_loader     = datamgr.get_data_loader(aug = False )
 
     elif params.dataset in ["EuroSAT"]:

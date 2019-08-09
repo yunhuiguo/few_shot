@@ -315,7 +315,7 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         cub_model = model_dict[params.model]()
         caltech256_model = model_dict[params.model]()
         dtd_model = model_dict[params.model]()
-
+        
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "miniImageNet", params.model, params.method)
         if params.train_aug:
@@ -340,15 +340,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
             else:
                 state.pop(key)
 
-<<<<<<< HEAD
-        #imagenet_model.load_state_dict(state)
-=======
         imagenet_model.load_state_dict(state)
 
         '''
->>>>>>> 06032ec283e2a021b366830bb8921636ac04df33
-        ###############################################################################################      
-
         ###############################################################################################      
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "cifar100", params.model, params.method)
         if params.train_aug:
@@ -428,7 +422,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
                 state.pop(key)
 
         caltech256_model.load_state_dict(state)
->>>>>>> c1d56657a1486d672efdd890946ae0ac61605f7a
         ###############################################################################################
         checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, "DTD", params.model, params.method)
         if params.train_aug:
@@ -561,10 +554,9 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         cifar100_embeddings_test = cifar100_embeddings_test[4:-1]
     
 
-        '''
         for index in embeddings_idx:
             embeddings_test.append(imagenet_embeddings_test[index])
-=======
+
         x_b_i = x_var[:, n_support:,:,:,:].contiguous().view( n_way* n_query,   *x.size()[2:]) # (75, 3, 224, 224)
         cub_embeddings_test = []
         for idx, module in enumerate(cub_model.trunk):
@@ -603,13 +595,10 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
         for index in embeddings_idx_model:
             embeddings_test.append(all_embeddings_test[index][embeddings_idx_of_each[index]])
       
->>>>>>> c1d56657a1486d672efdd890946ae0ac61605f7a
         embeddings_test = torch.cat(embeddings_test, 1)
-        '''
+    
         embeddings_test = imagenet_embeddings_test[-1]
-
-
-
+        
         ############################################################################################
         '''
 
@@ -626,7 +615,6 @@ def test_loop(novel_loader, return_std = False, loss_type="softmax", n_query = 1
 
         total_epoch = 100
         #embeddings_train = Variable(embeddings_train.cuda())
-
 
         net.train()
         for epoch in range(total_epoch):
